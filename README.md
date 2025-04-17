@@ -1,1 +1,1 @@
-# MPC control strategy for taking-off and landing of AWES
+# MPC control strategy for take-off and landing of AWES
