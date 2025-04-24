@@ -29,11 +29,11 @@
 #
 
 from acados_template import AcadosModel
-from casadi import SX, vertcat, sin, cos
+from casadi import SX, vertcat, sin, cos, tan
 
-def export_drone_ode_model() -> AcadosModel:
+def export_drone_tether_ode_model() -> AcadosModel:
 
-    model_name = 'drone_ode'
+    model_name = 'drone_tether_ode'
 
     # constants
     g = 9.81 # gravity constant [m/s^2]
@@ -44,27 +44,42 @@ def export_drone_ode_model() -> AcadosModel:
     n_ro = 6 # number of rotors
     m_dr = 1.5 # mass of the drone [kg]
     l_dr = 0.8 # length of arm of the drone [m]
+    k_t = 0.373 # pwm to thrust conversion factor, RANDOM
     # tether
     rho_te = 0.1 # density of the tether [kg/m^3]
     A_te = 0.01 # cross-sectional area of the tether [m^2]
+    tau_l = 0.1 # time constant of the tether length, RANDOM [s]
 
+    # Compute moments of inertia
+    j_sphere = (1/2)*m_ce*r_ce**2
+    j_motors = n_ro * m_ro*(l_dr**2)
+    j_xx = j_sphere + j_motors/2
+    j_yy = j_sphere + j_motors/2
+    j_zz = j_sphere + j_motors
+
+    # Inertia matrix
+    J = SX.zeros(3, 3)
+    J[0, 0] = j_xx
+    J[1, 1] = j_yy
+    J[2, 2] = j_zz
 
     # set up states & controls
     # state x
-    x           = SX.sym('x')
-    y           = SX.sym('y')
-    z           = SX.sym('z')
+    x_w         = SX.sym('x_w')
+    y_w         = SX.sym('y_w')
+    z_w         = SX.sym('z_w')
     phi         = SX.sym('phi')
     theta       = SX.sym('theta')
     psi         = SX.sym('psi')
-    vx          = SX.sym('vx')
-    vy          = SX.sym('vy')
-    vz          = SX.sym('vz')
+    vx_w        = SX.sym('vx_w')
+    vy_w        = SX.sym('vy_w')
+    vz_w        = SX.sym('vz_w')
     dphi        = SX.sym('dphi')
     dtheta      = SX.sym('dtheta')
     dpsi        = SX.sym('dpsi')
+    l_tet       = SX.sym('l_tet')
 
-    x = vertcat(x, y, z, phi, theta, psi, vx, vy, vz, dphi, dtheta, dpsi)
+    x = vertcat(x_w, y_w, z_w, phi, theta, psi, vx_w, vy_w, vz_w, dphi, dtheta, dpsi, l_tet)
 
     # xdot
     x_dot       = SX.sym('x_dot')
@@ -79,49 +94,70 @@ def export_drone_ode_model() -> AcadosModel:
     dphi_dot    = SX.sym('dphi_dot')
     dtheta_dot  = SX.sym('dtheta_dot')
     dpsi_dot    = SX.sym('dpsi_dot')
+    l_tet_dot   = SX.sym('l_tet_dot')
 
-    xdot = vertcat(x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot, vx_dot, vy_dot, vz_dot, dphi_dot, dtheta_dot, dpsi_dot)
+    xdot = vertcat(x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot, vx_dot, vy_dot, vz_dot, dphi_dot, dtheta_dot, dpsi_dot, l_tet_dot)
 
     # input u
-    thrust_dr = SX.sym('thrust_dr') # Normalized thrust command
-    phi_cmd = SX.sym('phi_cmd') # roll command [rad]
-    theta_cmd = SX.sym('theta_cmd') # pitch command [rad]
-    psi_cmd = SX.sym('psi_cmd') # yaw command [rad]
-    l_tether = SX.sym('l_tether') # length of the tether [m]
+    tau_x = SX.sym('tau_x') # Normalized thrust command
+    tau_y = SX.sym('tau_y') # roll command [rad]
+    tau_z = SX.sym('tau_z') # pitch command [rad]
+    t = SX.sym('t') # pitch command [rad]
+    l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
-    u = vertcat(phi_cmd, theta_cmd, psi_cmd, thrust_dr, l_tether)
+    u = vertcat(tau_x, tau_y, tau_z, t, l_tet_cmd)
 
-    # udot
-    phi_dot      = SX.sym('phi_dot')
-    theta_dot   = SX.sym('theta_dot')
-    psi_dot      = SX.sym('psi_dot')
-    thrust_dot  = SX.sym('thrust_dot')
-    l_tether_dot  = SX.sym('l_tether_dot')
+    # parameters p (mostly from IMU)
+    vx_b = SX.sym('vx_b') # body velocity in x direction [m/s]
+    vy_b = SX.sym('vy_b') # body velocity in y direction [m/s]
+    vz_b = SX.sym('vz_b') # body velocity in z direction [m/s]
+    p = SX.sym('p') # roll rate
+    q = SX.sym('q') # pitch rate
+    r = SX.sym('r') # yaw rate
+    theta_s = SX.sym('theta_s') # world frame polar angle of the tether [rad]
+    phi_s = SX.sym('phi_s') # world frame azimuthal angle of the tether [rad]
 
-    udot = vertcat(phi_dot, theta_dot, psi_dot, thrust_dot, l_tether_dot)
+    c_phi = cos(phi)
+    s_phi = sin(phi)
+    c_theta = cos(theta)
+    s_theta = sin(theta)
+    c_psi = cos(psi)
+    s_psi = sin(psi)
+    t_theta = tan(theta)
+    s_theta_s = sin(theta_s)
+    c_theta_s = cos(theta_s)
+    s_phi_s = sin(phi_s)
+    c_phi_s = cos(phi_s)
 
-    # disturbances
-    f_win = SX.sym('f_win') # winch reaction force [N]
-    tau_x = SX.sym('tau_x') # roll torque [Nm]
-    tau_y = SX.sym('tau_y') # pitch torque [Nm]
-    tau_z = SX.sym('tau_z') # yaw torque [Nm]
+    # Rotation matrix body to world
+    R_bw = SX.zeros(3, 3)
+    R_bw[0, :] = [c_psi*c_theta, c_psi*s_theta*s_phi - s_psi*c_phi, c_psi*s_theta*c_phi + s_psi*s_phi]
+    R_bw[1, :] = [s_psi*c_theta, s_psi*s_theta*s_phi + c_psi*c_phi, s_psi*s_theta*c_phi - c_psi*s_phi]
+    R_bw[2, :] = [-s_theta, c_theta*s_phi, c_theta*c_phi]
 
-    d = vertcat(f_win, tau_x, tau_y, tau_z)
-    
-    # Augmented dynamics
-    x_aug = vertcat(x, u)
-    x_aug_dot = vertcat(xdot, udot)
+    # Inverse rotation matrix for angular velocity ZYX
+    Rw_bw = SX.zeros(3, 3)
+    Rw_bw[0, :] = [1, s_phi*t_theta, c_phi*t_theta]
+    Rw_bw[1, :] = [0, c_phi, -s_phi]
+    Rw_bw[2, :] = [0, s_phi/c_theta, c_phi/c_theta]
+
+    # Force propellers
+    e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
+    F_prop = k_t*t*R_bw @ e_prop # thrust force in world frame
+
+    # Force tether
+    e_tet = -vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    # NOT CONSIDERING WINCH FORCE ATM
+    F_tet = rho_te*A_te*(l_tet)*g*e_tet # tether force in world frame
 
     # dynamics
-    f_expl = vertcat(vx,
-                     vy,
-                     vz,
-                     dphi,
-                     dtheta,
-                     dpsi,
-                     dtheta,
-                     (-m*l*sin_theta*dtheta*dtheta + m*g*cos_theta*sin_theta+F)/denominator,
-                     (-m*l*cos_theta*sin_theta*dtheta*dtheta + F*cos_theta+(M+m)*g*sin_theta)/(l*denominator)
+    f_expl = vertcat(R_bw @ vertcat(vx_b, vy_b, vz_b),
+                     Rw_bw @ vertcat(p, q, r),
+                     1/m_dr*F_prop + F_tet,
+                     1/J[0, 0]*(tau_x - (J[2, 2] - J[1, 1])*q*r),
+                     1/J[1, 1]*(tau_y - (J[0, 0] - J[2, 2])*p*r),
+                     1/J[2, 2]*(tau_z - (J[1, 1] - J[0, 0])*p*q),
+                     1/tau_l*(l_tet - l_tet_cmd)
                      )
 
     f_impl = xdot - f_expl
