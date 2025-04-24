@@ -1,5 +1,6 @@
 from acados_template import AcadosModel
 from casadi import SX, vertcat, sin, cos, tan
+import math
 
 def export_drone_tether_ode_model() -> AcadosModel:
 
@@ -84,10 +85,14 @@ def export_drone_tether_ode_model() -> AcadosModel:
     p = SX.sym('p') # roll rate
     q = SX.sym('q') # pitch rate
     r = SX.sym('r') # yaw rate
-    theta_s = SX.sym('theta_s') # world frame polar angle of the tether [rad]
-    phi_s = SX.sym('phi_s') # world frame azimutal angle of the tether [rad]
+    # theta_s = SX.sym('theta_s') # world frame polar angle of the tether [rad]
+    # phi_s = SX.sym('phi_s') # world frame azimutal angle of the tether [rad]
 
-    params = vertcat(vx_b, vy_b, vz_b, p, q, r, theta_s, phi_s)
+    params = vertcat(vx_b, vy_b, vz_b, p, q, r)#, theta_s, phi_s)
+
+    # spherical angles
+    theta_s = math.atan2((x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
+    phi_s = math.atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
     s_phi = sin(phi)
@@ -132,7 +137,7 @@ def export_drone_tether_ode_model() -> AcadosModel:
     # Force tether
     e_tet = -vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
-    F_tet = rho_te*A_te*(l_tet)*g*e_tet # tether force in world frame
+    F_tet = rho_te*A_te*l_tet*g*e_tet # tether force in world frame
 
     # dynamics
     f_expl = vertcat(R_bw @ vertcat(vx_b, vy_b, vz_b),

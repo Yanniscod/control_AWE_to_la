@@ -1,53 +1,52 @@
-from typing import Dict
 import matplotlib.pyplot as plt
-import numpy as np
 from acados_template import latexify_plot
 
-
-def plot_drone_tet_eval(t, U, X_true, eval: Dict, latexify=False, time_label='$t$', x_labels=None, u_labels=None):
-    """
-    Plots pendulum with evaluation of cost function.
-    Params:
-        t: time values of the discretization
-        U: arrray with shape (N_sim-1, nu) or (N_sim, nu)
-        X_true: arrray with shape (N_sim, nx)
-        eval: evaluation dictionary
-        latexify: latex style plots
-    """
-
+def plot_drone_tet_eval(time, tau_max, l_tet_min,  simU, simX, latexify=False):
     if latexify:
         latexify_plot()
+    
+    fig, axs = plt.subplots(5, 1, figsize=(10, 8), sharex=True)
 
-    nx = X_true.shape[1]
-    fig, axes = plt.subplots(nx + 2, 1, sharex=True)
+    # Plot control inputs (tau)
+    axs[0].plot(time[:-1], simU[:, 0], label=r'$\tau_1$')
+    axs[0].plot(time[:-1], simU[:, 1], label=r'$\tau_2$')
+    axs[0].plot(time[:-1], simU[:, 2], label=r'$\tau_3$')
+    axs[0].axhline(tau_max, color='gray', linestyle='--', label='Torque bounds')
+    axs[0].axhline(-tau_max, color='gray', linestyle='--')
+    axs[0].set_ylabel("Torque [Nm]")
+    axs[0].legend()
+    axs[0].grid(True)
 
-    for i in range(nx):
-        axes[i].plot(t, X_true[:, i])
-        axes[i].grid()
-        if x_labels is not None:
-            axes[i].set_ylabel(x_labels[i])
-        else:
-            axes[i].set_ylabel(f'$x_{i}$')
+    # Plot tether length command
+    axs[2].plot(time[:-1], simU[:, 3], label=r'$l_{\mathrm{tether_{cmd}}}$')
+    axs[2].axhline(l_tet_min, color='gray', linestyle='--', label='Tether cmd bound')
+    axs[2].set_ylabel("Tether Length [m]")
+    axs[2].legend()
+    axs[2].grid(True)
 
-    axes[-2].plot(t[:-1], eval['cost_without_slacks'], label='cost w/o slacks')
-    axes[-2].plot(t[:-1], eval['cost'], label='cost with slacks')
-    axes[-2].grid()
-    axes[-2].legend()
-    axes[-2].set_ylabel('cost')
+    # Plot tether length
+    axs[1].plot(time, simX[:, -1], label=r'$l_{\mathrm{tether}}$')
+    axs[1].set_ylabel("Tether Length [m]")
+    axs[1].legend()
+    axs[1].grid(True)
 
-    axes[-1].step(t, np.append([U[0]], U))
+    # Plot drone position
+    axs[3].plot(time, simX[:, 0], label='x')
+    axs[3].plot(time, simX[:, 1], label='y')
+    axs[3].plot(time, simX[:, 2], label='z')
+    axs[3].set_ylabel("Position [m]")
+    axs[3].set_xlabel("Time [s]")
+    axs[3].legend()
+    axs[3].grid(True)
 
-    if u_labels is not None:
-        axes[-1].set_ylabel(u_labels[0])
-    else:
-        axes[-1].set_ylabel('$u$')
+    # Plot drone orientation
+    axs[4].plot(time, simX[:, 3], label='phi')
+    axs[4].plot(time, simX[:, 4], label='theta')
+    axs[4].plot(time, simX[:, 5], label='psi')
+    axs[4].set_ylabel("Orientation [deg]")
+    axs[4].set_xlabel("Time [s]")
+    axs[4].legend()
+    axs[4].grid(True)
 
-    axes[-1].set_xlim(t[0], t[-1])
-    axes[-1].set_xlabel(time_label)
-    axes[-1].grid()
-
-    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, hspace=0.4)
-
-    fig.align_ylabels()
-
-    return fig, axes
+    plt.tight_layout()
+    plt.show()

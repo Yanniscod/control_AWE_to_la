@@ -75,6 +75,11 @@ x_speed_init = (0.0, 0.0, 0.0) # init world speed [m/s]
 # should init from last sensor measurements <-------------------------------------------------------------------------------------------------
 ocp.constraints.x0 = np.array([x_pos_init[0], x_pos_init[1], x_pos_init[2], x_orient_init[0], x_orient_init[1], x_orient_init[2], x_speed_init[0], x_speed_init[1], x_speed_init[2], 0.0, 0.0, 0.0, l_tet_init])
 
+ocp.parameter_values = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+ocp.constraints.lbx = np.array([-200.0, -200.0, 0.0, -np.pi/6, -np.pi/6, 0.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, l_tet_min])
+ocp.constraints.ubx = np.array([200.0, 200.0, 200.0, np.pi/6, np.pi/6, np.pi, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, l_tet_max])
+ocp.constraints.idxbx = np.arange(nx)
+
 # set options
 ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
 # PARTIAL_CONDENSING_HPIPM, FULL_CONDENSING_QPOASES, FULL_CONDENSING_HPIPM,
@@ -90,8 +95,6 @@ ocp.solver_options.tf = Tf
 # use the CMake build pipeline
 cmake_builder = ocp_get_default_cmake_builder()
 
-ocp.parameter_values = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-
 ocp_solver = AcadosOcpSolver(ocp)
 
 simX = np.zeros((N+1, nx))
@@ -103,11 +106,12 @@ vz = 0.0
 p = 0.0
 q = 0.0
 r = 0.0
-theta = 0.0
-phi = 0.0
+# theta_s = 0.0
+# phi_s = 0.0
 
 for stage in range(N):
-    ocp_solver.set(stage, "p", np.array([vx, vy, vz, p, q, r, theta, phi]))
+    # set yref for tether_length
+    ocp_solver.set(stage, "p", np.array([vx, vy, vz, p, q, r]))
 
 status = ocp_solver.solve()
 
@@ -124,4 +128,4 @@ simX[N,:] = ocp_solver.get(N, "x")
 ocp_solver.print_statistics() # encapsulates: stat = ocp_solver.get_stats("statistics")
 
 # to implem
-plot_drone_tet_eval(np.linspace(0, Tf, N+1), Fmax, simU, simX, latexify=True)
+plot_drone_tet_eval(np.linspace(0, Tf, N+1), tau_max, l_tet_min, simU, simX, latexify=True)
