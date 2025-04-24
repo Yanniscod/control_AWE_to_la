@@ -1,33 +1,3 @@
-#
-# Copyright (c) The acados authors.
-#
-# This file is part of acados.
-#
-# The 2-Clause BSD License
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-# this list of conditions and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-# this list of conditions and the following disclaimer in the documentation
-# and/or other materials provided with the distribution.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-# POSSIBILITY OF SUCH DAMAGE.;
-#
-
 from acados_template import AcadosModel
 from casadi import SX, vertcat, sin, cos, tan
 
@@ -44,7 +14,7 @@ def export_drone_tether_ode_model() -> AcadosModel:
     n_ro = 6 # number of rotors
     m_dr = 1.5 # mass of the drone [kg]
     l_dr = 0.8 # length of arm of the drone [m]
-    k_t = 0.373 # pwm to thrust conversion factor, RANDOM
+    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
     # tether
     rho_te = 0.1 # density of the tether [kg/m^3]
     A_te = 0.01 # cross-sectional area of the tether [m^2]
@@ -115,7 +85,9 @@ def export_drone_tether_ode_model() -> AcadosModel:
     q = SX.sym('q') # pitch rate
     r = SX.sym('r') # yaw rate
     theta_s = SX.sym('theta_s') # world frame polar angle of the tether [rad]
-    phi_s = SX.sym('phi_s') # world frame azimuthal angle of the tether [rad]
+    phi_s = SX.sym('phi_s') # world frame azimutal angle of the tether [rad]
+
+    params = vertcat(vx_b, vy_b, vz_b, p, q, r, theta_s, phi_s)
 
     c_phi = cos(phi)
     s_phi = sin(phi)
@@ -131,15 +103,27 @@ def export_drone_tether_ode_model() -> AcadosModel:
 
     # Rotation matrix body to world
     R_bw = SX.zeros(3, 3)
-    R_bw[0, :] = [c_psi*c_theta, c_psi*s_theta*s_phi - s_psi*c_phi, c_psi*s_theta*c_phi + s_psi*s_phi]
-    R_bw[1, :] = [s_psi*c_theta, s_psi*s_theta*s_phi + c_psi*c_phi, s_psi*s_theta*c_phi - c_psi*s_phi]
-    R_bw[2, :] = [-s_theta, c_theta*s_phi, c_theta*c_phi]
+    R_bw[0, 0] = c_psi*c_theta
+    R_bw[0, 1] = c_psi*s_theta*s_phi - s_psi*c_phi
+    R_bw[0, 2] = c_psi*s_theta*c_phi + s_psi*s_phi
+    R_bw[1, 0] = s_psi*c_theta
+    R_bw[1, 1] = s_psi*s_theta*s_phi + c_psi*c_phi
+    R_bw[1, 2] = s_psi*s_theta*c_phi - c_psi*s_phi
+    R_bw[2, 0] = -s_theta
+    R_bw[2, 1] = c_theta*s_phi
+    R_bw[2, 2] = c_theta*c_phi
 
     # Inverse rotation matrix for angular velocity ZYX
     Rw_bw = SX.zeros(3, 3)
-    Rw_bw[0, :] = [1, s_phi*t_theta, c_phi*t_theta]
-    Rw_bw[1, :] = [0, c_phi, -s_phi]
-    Rw_bw[2, :] = [0, s_phi/c_theta, c_phi/c_theta]
+    Rw_bw[0, 0] = 1
+    Rw_bw[0, 1] = s_phi*t_theta
+    Rw_bw[0, 2] = c_phi*t_theta
+    Rw_bw[1, 0] = 0
+    Rw_bw[1, 1] = c_phi
+    Rw_bw[1, 2] = -s_phi
+    Rw_bw[2, 0] = 0
+    Rw_bw[2, 1] = s_phi/c_theta
+    Rw_bw[2, 2] = c_phi/c_theta
 
     # Force propellers
     e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
@@ -169,11 +153,14 @@ def export_drone_tether_ode_model() -> AcadosModel:
     model.x = x
     model.xdot = xdot
     model.u = u
+    model.p = params
     model.name = model_name
 
     # store meta information
-    model.x_labels = ['$x$ [m]', r'$\theta$ [rad]', '$v$ [m]', r'$\dot{\theta}$ [rad/s]']
-    model.u_labels = ['$F$']
+    model.x_labels = ['$x$ [m]', '$y$ [m]', '$z$ [m]', r'$\phi$ [rad]', r'$\theta$ [rad]', r'$\psi$ [rad]',
+                      '$\dot{x}$ [m/s]', '$\dot{y}$ [m/s]', '$\dot{z}$ [m/s]', r'$\dot{\phi}$ [rad/s]', r'$\dot{\theta}$ [rad/s]',
+                      r'$\dot{\psi}$ [rad/s]', '$l_{tet}$ [m]']
+    model.u_labels = ['$\tau_x$ [N]', r'$\tau_y$ [rad]', r'$\tau_z$ [rad]', '$t$ [s]', '$l_{tet}^{cmd}$ [m]']
     model.t_label = '$t$ [s]'
 
     return model
