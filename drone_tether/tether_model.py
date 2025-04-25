@@ -187,7 +187,7 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     # tether
     rho_te = 0.1 # density of the tether [kg/m^3]
     A_te = 0.01 # cross-sectional area of the tether [m^2]
-    tau_l = 0.1 # time constant of the tether length, RANDOM [s]
+    tau_l = 10.0 # time constant of the tether length, RANDOM [s]
 
     # Compute moments of inertia
     j_sphere = (1/2)*m_ce*r_ce**2
