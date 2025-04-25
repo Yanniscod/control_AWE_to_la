@@ -1,37 +1,52 @@
 from acados_template import AcadosOcp, AcadosOcpSolver, ocp_get_default_cmake_builder
-from tether_model import export_drone_tether_ode_model
+from tether_model import export_drone_tether_ode_model_gpt
 import numpy as np
 import scipy.linalg
 from utils import plot_drone_tet_eval
-from casadi import SX, vertcat
+from casadi import SX, vertcat, Function
 
 # create ocp object to formulate the OCP
 ocp = AcadosOcp()
 
 # set model
-model = export_drone_tether_ode_model()
+model = export_drone_tether_ode_model_gpt()
 ocp.model = model
 
 Tf = 1.0
 nx = model.x.rows()
 nu = model.u.rows()
 ny = nx + nu
-ny_e = 6
-N = 20
+ny_e = nx
+N = 50
 
 # set dimensions
 ocp.solver_options.N_horizon = N
 
 # set cost
-Q_p = 2*np.diag([1e3, 1e3, 1e-2]) # position
-Q_ori = 2*np.diag([1e3, 1e3, 1e-2]) # rpy
-Q_v = 2*np.diag([1e3, 1e3, 1e-2]) # linear vel
-Q_w = 2*np.diag([1e-2, 1e-2, 1e-2]) # angular vel
-q_l = 2*1e-2 # cost on tether length
-Q_u = 2*np.diag([1e-2, 1e-2, 1e-2, 1e-2, 1e-2])
+Q = np.eye(nx)
+Q[0,0] = 120.0      # x
+Q[1,1] = 100.0      # y
+Q[2,2] = 100.0      # z
+Q[3,3] = 1.0e-3     # phi
+Q[4,4] = 1.0e-3     # theta
+Q[5,5] = 1.0e-3     # psi
+Q[7,7] = 7e-1       # vbx
+Q[8,8] = 1.0        # vby
+Q[9,9] = 4.0        # vbz
+Q[6,6] = 1.0e-3     # wx
+Q[10,10] = 1e-5     # wy
+Q[11,11] = 1e-5     # wz
+Q[12,12] = 10.0     # l_tet
 
-ocp.cost.W_e = scipy.linalg.block_diag(Q_p, Q_ori)
-ocp.cost.W = scipy.linalg.block_diag(Q_p, Q_ori, Q_v, Q_w, q_l, Q_u)
+R = np.eye(nu)
+R[0,0] = 0.06    # taux
+R[1,1] = 0.06    # tauy
+R[2,2] = 0.06    # tauz
+R[3,3] = 0.06    # t
+R[4,4] = 0.06    # l_tet
+
+ocp.cost.W = scipy.linalg.block_diag(Q, R)
+ocp.cost.W_e = 50*Q
 
 ocp.cost.cost_type = 'NONLINEAR_LS'
 ocp.cost.cost_type_e = 'NONLINEAR_LS'
@@ -40,7 +55,7 @@ ocp.cost.Vx = np.zeros((ny, nx))
 ocp.cost.Vx[:nx,:nx] = np.eye(nx)
 
 Vu = np.zeros((ny, nu))
-Vu[4,0] = 1.0
+Vu[nx:, :] = np.eye(nu)
 ocp.cost.Vu = Vu
 
 ocp.cost.Vx_e = np.eye(nx)
@@ -53,34 +68,34 @@ epsilon = 0.3
 l_tet_ref = 0.0 #dist_gs_drone - epsilon
 
 yref = np.zeros((ny, ))
-yref[12] = l_tet_ref # l_tet
+yref[2] = 0.5 # z_w
+yref[12] = 0.0 # l_tet
 ocp.cost.yref = yref
-ocp.cost.yref_e = np.zeros((ny_e, ))
+yref_e = np.zeros((ny_e, ))
+yref_e[2] = 0.5 # z_w
+yref_e[12] = l_tet_ref # l_tet
+ocp.cost.yref_e = yref_e
 
 ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
-ocp.model.cost_y_expr_e = vertcat(ocp.model.x[:6])
+ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
 # set constraints
 tau_max = 10 # [N*m]
 l_tet_max = 100 # [m]
 l_tet_min = 0.1 # [m]
-ocp.constraints.lbu = np.array([-tau_max, -tau_max, -tau_max, 0.0, l_tet_min])
+ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0, l_tet_min])
 ocp.constraints.ubu = np.array([tau_max, tau_max, tau_max, 1.0, l_tet_max])
 ocp.constraints.idxbu = np.arange(nu)
 
 l_tet_init = 2.5
-x_pos_init = (0.3, 0.3, 0.2) # init world pose [m]
-x_orient_init = (0.0, 0.0, 0.0) # rpy [deg]
-x_speed_init = (0.0, 0.0, 0.0) # init world speed [m/s]
 # should init from last sensor measurements <-------------------------------------------------------------------------------------------------
-ocp.constraints.x0 = np.array([x_pos_init[0], x_pos_init[1], x_pos_init[2], x_orient_init[0], x_orient_init[1], x_orient_init[2], x_speed_init[0], x_speed_init[1], x_speed_init[2], 0.0, 0.0, 0.0, l_tet_init])
+ocp.constraints.x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, l_tet_init])
 
-ocp.parameter_values = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-ocp.constraints.lbx = np.array([-200.0, -200.0, 0.0, -np.pi/6, -np.pi/6, 0.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, l_tet_min])
-ocp.constraints.ubx = np.array([200.0, 200.0, 200.0, np.pi/6, np.pi/6, np.pi, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, l_tet_max])
-ocp.constraints.idxbx = np.arange(nx)
+f_expl_fun = Function("f_expl_fun", [model.x, model.u], [model.f_expl_expr])
+print("f_expl at x0:", f_expl_fun(ocp.constraints.x0[:nx], ocp.constraints.x0[nx:]).toarray())
 
 # set options
+ocp.solver_options.print_level = 3
 ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
 # PARTIAL_CONDENSING_HPIPM, FULL_CONDENSING_QPOASES, FULL_CONDENSING_HPIPM,
 # PARTIAL_CONDENSING_QPDUNES, PARTIAL_CONDENSING_OSQP
@@ -99,19 +114,6 @@ ocp_solver = AcadosOcpSolver(ocp)
 
 simX = np.zeros((N+1, nx))
 simU = np.zeros((N, nu))
-
-vx = 0.0
-vy = 0.0
-vz = 0.0
-p = 0.0
-q = 0.0
-r = 0.0
-# theta_s = 0.0
-# phi_s = 0.0
-
-for stage in range(N):
-    # set yref for tether_length
-    ocp_solver.set(stage, "p", np.array([vx, vy, vz, p, q, r]))
 
 status = ocp_solver.solve()
 

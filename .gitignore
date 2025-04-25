@@ -1,3 +1,4 @@
+.vscode/
 */__pycache__
 */c_generated_code/
 */acados_ocp.json
