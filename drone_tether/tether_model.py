@@ -382,21 +382,12 @@ def export_drone_tether_fo_model() -> AcadosModel:
 
     u = vertcat(phi_cmd, theta_cmd, psi_cmd, thrust, l_tet_cmd)
 
-    # spherical angles
-    # theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
-    # phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
-
     c_phi = cos(phi)
     s_phi = sin(phi)
     c_theta = cos(theta)
     s_theta = sin(theta)
     c_psi = cos(psi)
     s_psi = sin(psi)
-    # t_theta = tan(theta)
-    # s_theta_s = sin(theta_s)
-    # c_theta_s = cos(theta_s)
-    # s_phi_s = sin(phi_s)
-    # c_phi_s = cos(phi_s)
 
     # Rotation matrix body to world
     R_bw = SX.zeros(3, 3)
@@ -414,9 +405,6 @@ def export_drone_tether_fo_model() -> AcadosModel:
     e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
     F_prop = k_t*thrust*R_bw @ e_prop # thrust force in world frame
 
-    # Force tether
-    # e_tet = vertcat(0, 0, 0)#(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
-    # F_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
     # gravity
     gravity = vertcat(0, 0, -g) # gravity force in world frame
 
@@ -425,7 +413,9 @@ def export_drone_tether_fo_model() -> AcadosModel:
                      1/tau_phi*(l_tet - l_tet_cmd),
                      1/tau_theta*(l_tet - l_tet_cmd),
                      1/tau_psi*(l_tet - l_tet_cmd),
-                     gravity + 1/m_dr*(F_prop),
+                     gravity[0] + 1/m_dr*F_prop[0],
+                     gravity[1] + 1/m_dr*F_prop[1],
+                     gravity[2] + 1/m_dr*F_prop[2],
                      1/tau_l*(l_tet - l_tet_cmd)
                      )
 

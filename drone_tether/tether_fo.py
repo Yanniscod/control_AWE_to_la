@@ -24,23 +24,23 @@ ocp.solver_options.N_horizon = N
 
 # set cost
 Q = np.eye(nx)
-Q[0,0] = 1.0e-3     # x
-Q[1,1] = 1.0e-3     # y
+Q[0,0] = 1.0     # x
+Q[1,1] = 1.0     # y
 Q[2,2] = 1.0        # z
-Q[3,3] = 1.0e-3     # phi
-Q[4,4] = 1.0e-3     # theta
-Q[5,5] = 1.0e-3     # psi
-Q[6,6] = 7e-1       # vwx
+Q[3,3] = 1.0     # phi
+Q[4,4] = 1.0     # theta
+Q[5,5] = 1.0     # psi
+Q[6,6] = 0.0       # vwx
 Q[7,7] = 1.0        # vwy
-Q[8,8] = 4.0        # vwz
+Q[8,8] = 1.0        # vwz
 Q[9,9] = 1.0     # l_tet
 
 R = np.eye(nu)
-R[0,0] = 0.06    # phi_cmd
-R[1,1] = 0.06    # theta_cmd
-R[2,2] = 0.06    # psi_cmd
-R[3,3] = 0.06    # thrust
-R[4,4] = 0.3    # l_tet_cmd
+R[0,0] = 0.0    # phi_cmd
+R[1,1] = 0.0    # theta_cmd
+R[2,2] = 0.0    # psi_cmd
+R[3,3] = 1.0    # thrust
+R[4,4] = 1.0    # l_tet_cmd
 
 ocp.cost.W = scipy.linalg.block_diag(Q, R)
 ocp.cost.W_e = 50*Q
