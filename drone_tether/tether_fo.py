@@ -2,7 +2,7 @@ from acados_template import AcadosOcp, AcadosOcpSolver, ocp_get_default_cmake_bu
 from tether_model import export_drone_tether_fo_model
 import numpy as np
 import scipy.linalg
-from utils import plot_drone_tet_eval
+from utils import plot_drone_tet_fo_eval
 from casadi import SX, vertcat, Function
 
 # create ocp object to formulate the OCP
@@ -58,10 +58,10 @@ ocp.cost.Vu = Vu
 ocp.cost.Vx_e = np.eye(nx)
 
 yref = np.zeros((ny, ))
-yref[2] = 0.5 # z_w
+yref[2] = 1.0 # z_w
 ocp.cost.yref = yref
 yref_e = np.zeros((ny_e, ))
-yref_e[2] = 0.5 # z_w
+yref_e[2] = 1.0 # z_w
 ocp.cost.yref_e = yref_e
 
 ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
@@ -128,4 +128,4 @@ simX[N,:] = ocp_solver.get(N, "x")
 ocp_solver.print_statistics() # encapsulates: stat = ocp_solver.get_stats("statistics")
 
 # to implem
-plot_drone_tet_eval(np.linspace(0, Tf, N+1), np.pi/4, l_tet_min, simU, simX, latexify=True)
+plot_drone_tet_fo_eval(np.linspace(0, Tf, N+1), np.pi/4, l_tet_min, simU, simX, latexify=True)
