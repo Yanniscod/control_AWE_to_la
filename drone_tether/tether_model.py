@@ -327,3 +327,125 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
 
     return model
 
+def export_drone_tether_fo_model() -> AcadosModel:
+
+    model_name = 'drone_tether_fo_model'
+
+    # constants
+    g = 9.81 # gravity constant [m/s^2]
+    # drone
+    m_dr = 1.3 # mass of the drone [kg]
+    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
+    # tether
+    rho_te = 970 # density of the tether [kg/m^3]
+    A_te = 0.00001 # cross-sectional area of the tether [m^2]
+    tau_l = 1.2 # time constant of the tether length, RANDOM [s]
+    tau_phi = 0.1
+    tau_theta = 0.1
+    tau_psi = 0.1
+
+    # set up states & controls
+    # state x
+    x_w         = SX.sym('x_w')
+    y_w         = SX.sym('y_w')
+    z_w         = SX.sym('z_w')
+    phi         = SX.sym('phi')
+    theta       = SX.sym('theta')
+    psi         = SX.sym('psi')
+    vx_w        = SX.sym('vx_w')
+    vy_w        = SX.sym('vy_w')
+    vz_w        = SX.sym('vz_w')
+    l_tet       = SX.sym('l_tet')
+
+    x = vertcat(x_w, y_w, z_w, phi, theta, psi, vx_w, vy_w, vz_w, l_tet)
+
+    # xdot
+    x_dot       = SX.sym('x_dot')
+    y_dot       = SX.sym('y_dot')
+    z_dot       = SX.sym('z_dot')
+    phi_dot     = SX.sym('phi_dot')
+    theta_dot   = SX.sym('theta_dot')
+    psi_dot     = SX.sym('psi_dot')
+    vx_dot      = SX.sym('vx_dot')
+    vy_dot      = SX.sym('vy_dot')
+    vz_dot      = SX.sym('vz_dot')
+    l_tet_dot   = SX.sym('l_tet_dot')
+
+    xdot = vertcat(x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot, vx_dot, vy_dot, vz_dot, l_tet_dot)
+
+    # input u
+    phi_cmd = SX.sym('phi_cmd') # Normalized thrust command
+    theta_cmd = SX.sym('theta_cmd') # roll command [rad]
+    psi_cmd = SX.sym('psi_cmd') # pitch command [rad]
+    thrust = SX.sym('thrust') # thrust command in PWM
+    l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
+
+    u = vertcat(phi_cmd, theta_cmd, psi_cmd, thrust, l_tet_cmd)
+
+    # spherical angles
+    # theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
+    # phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
+
+    c_phi = cos(phi)
+    s_phi = sin(phi)
+    c_theta = cos(theta)
+    s_theta = sin(theta)
+    c_psi = cos(psi)
+    s_psi = sin(psi)
+    # t_theta = tan(theta)
+    # s_theta_s = sin(theta_s)
+    # c_theta_s = cos(theta_s)
+    # s_phi_s = sin(phi_s)
+    # c_phi_s = cos(phi_s)
+
+    # Rotation matrix body to world
+    R_bw = SX.zeros(3, 3)
+    R_bw[0, 0] = c_psi*c_theta
+    R_bw[0, 1] = c_psi*s_theta*s_phi - s_psi*c_phi
+    R_bw[0, 2] = c_psi*s_theta*c_phi + s_psi*s_phi
+    R_bw[1, 0] = s_psi*c_theta
+    R_bw[1, 1] = s_psi*s_theta*s_phi + c_psi*c_phi
+    R_bw[1, 2] = s_psi*s_theta*c_phi - c_psi*s_phi
+    R_bw[2, 0] = -s_theta
+    R_bw[2, 1] = c_theta*s_phi
+    R_bw[2, 2] = c_theta*c_phi
+
+    # Force propellers
+    e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
+    F_prop = k_t*thrust*R_bw @ e_prop # thrust force in world frame
+
+    # Force tether
+    # e_tet = vertcat(0, 0, 0)#(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    # F_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
+    # gravity
+    gravity = vertcat(0, 0, -g) # gravity force in world frame
+
+    # dynamics
+    f_expl = vertcat(vx_w, vy_w, vz_w,
+                     1/tau_phi*(l_tet - l_tet_cmd),
+                     1/tau_theta*(l_tet - l_tet_cmd),
+                     1/tau_psi*(l_tet - l_tet_cmd),
+                     gravity + 1/m_dr*(F_prop),
+                     1/tau_l*(l_tet - l_tet_cmd)
+                     )
+
+    f_impl = xdot - f_expl
+
+    model = AcadosModel()
+
+    model.f_impl_expr = f_impl
+    model.f_expl_expr = f_expl
+    model.x = x
+    model.xdot = xdot
+    model.u = u
+    model.name = model_name
+
+    # store meta information
+    model.x_labels = ['$x$ [m]', '$y$ [m]', '$z$ [m]', r'$\phi$ [rad]', r'$\theta$ [rad]', r'$\psi$ [rad]',
+                      '$\dot{x}$ [m/s]', '$\dot{y}$ [m/s]', '$\dot{z}$ [m/s]', r'$\dot{\phi}$ [rad/s]', r'$\dot{\theta}$ [rad/s]',
+                      r'$\dot{\psi}$ [rad/s]', '$l_{tet}$ [m]']
+    model.u_labels = ['$\tau_x$ [N]', r'$\tau_y$ [rad]', r'$\tau_z$ [rad]', '$t$ [s]', '$l_{tet}^{cmd}$ [m]']
+    model.t_label = '$t$ [s]'
+
+    return model
+
