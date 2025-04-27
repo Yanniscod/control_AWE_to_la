@@ -183,10 +183,10 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     n_ro = 8 # number of rotors
     m_dr = 1.3 # mass of the drone [kg]
     l_dr = 0.2 # length of arm of the drone [m]
-    k_t = 50 #0.373 # pwm to thrust conversion factor, RANDOM
+    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
     # tether
     rho_te = 970 # density of the tether [kg/m^3]
-    A_te = 0.01 # cross-sectional area of the tether [m^2]
+    A_te = 0.00001 # cross-sectional area of the tether [m^2]
     tau_l = 1.2 # time constant of the tether length, RANDOM [s]
 
     # Compute moments of inertia
@@ -241,10 +241,10 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     tau_x = SX.sym('tau_x') # Normalized thrust command
     tau_y = SX.sym('tau_y') # roll command [rad]
     tau_z = SX.sym('tau_z') # pitch command [rad]
-    t = SX.sym('t') # thrust command in PWM
+    thrust = SX.sym('thrust') # thrust command in PWM
     l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
-    u = vertcat(tau_x, tau_y, tau_z, t, l_tet_cmd)
+    u = vertcat(tau_x, tau_y, tau_z, thrust, l_tet_cmd)
 
     # spherical angles
     theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
@@ -288,10 +288,10 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
 
     # Force propellers
     e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
-    F_prop = k_t*t*R_bw @ e_prop # thrust force in world frame
+    F_prop = k_t*thrust*R_bw @ e_prop # thrust force in world frame
 
     # Force tether
-    e_tet = vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    e_tet = vertcat(0, 0, 0)#(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
     F_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
     # gravity
