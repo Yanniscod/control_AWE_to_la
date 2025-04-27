@@ -36,14 +36,14 @@ Q[9,9] = 4.0        # vbz
 Q[6,6] = 1.0e-3     # wx
 Q[10,10] = 1e-5     # wy
 Q[11,11] = 1e-5     # wz
-Q[12,12] = 10.0     # l_tet
+Q[12,12] = 100.0     # l_tet
 
 R = np.eye(nu)
 R[0,0] = 0.06    # taux
 R[1,1] = 0.06    # tauy
 R[2,2] = 0.06    # tauz
 R[3,3] = 0.06    # t
-R[4,4] = 0.06    # l_tet
+R[4,4] = 0.3    # l_tet
 
 ocp.cost.W = scipy.linalg.block_diag(Q, R)
 ocp.cost.W_e = 50*Q
@@ -80,19 +80,19 @@ ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
 ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
 # set constraints
-tau_max = 10 # [N*m]
-l_tet_max = 10 # [m]
+tau_max = 20 # [N*m]
+l_tet_cmd_max = 50 # [m]
 l_tet_min = 0.1 # [m]
 ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0, l_tet_min])
-ocp.constraints.ubu = np.array([tau_max, tau_max, tau_max, 1.0, l_tet_max])
+ocp.constraints.ubu = np.array([tau_max, tau_max, tau_max, 1.0, l_tet_cmd_max])
 ocp.constraints.idxbu = np.arange(nu)
 
 l_tet_init = 2.5
 # should init from last sensor measurements <-------------------------------------------------------------------------------------------------
-ocp.constraints.x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, l_tet_init])
+ocp.constraints.x0 = np.array([0.2, 0.0, 0.5, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, l_tet_init])
 x0 = ocp.constraints.x0
-u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
-
+u0 = np.array([0.4, 0.4, 0.4, 0.4, 2.0])
+l_tet_max = 50.0 # [m]
 ocp.constraints.lbx = np.array([-200.0, -200.0, 0.0, -np.pi/6, -np.pi/6,
     -np.pi, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, l_tet_min])
 ocp.constraints.ubx = np.array([+200.0, +200.0, +200.0, +np.pi/6, +np.pi/6,
@@ -112,7 +112,6 @@ ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOAS
 # PARTIAL_CONDENSING_QPDUNES, PARTIAL_CONDENSING_OSQP
 ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
 ocp.solver_options.integrator_type = 'ERK'
-# ocp.solver_options.print_level = 1
 ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
 
 # set prediction horizon
@@ -126,10 +125,13 @@ ocp_solver = AcadosOcpSolver(ocp)
 simX = np.zeros((N+1, nx))
 simU = np.zeros((N, nu))
 
-for i in range(N):
-    ocp_solver.set(i, "x", x0)
-    ocp_solver.set(i, "u", u0)
-ocp_solver.set(N, "x", x0)
+# for i in range(N):
+#     ocp_solver.set(i, "x", x0)
+#     ocp_solver.set(i, "u", u0)
+# ocp_solver.set(N, "x", x0)
+
+# ocp_solver.set(0, "lbx", x0)
+# ocp_solver.set(0, "lbx", x0)
 
 status = ocp_solver.solve()
 

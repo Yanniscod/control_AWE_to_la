@@ -1,5 +1,5 @@
 from acados_template import AcadosModel
-from casadi import SX, vertcat, sin, cos, tan, atan2
+from casadi import SX, vertcat, sin, cos, tan, atan2, sqrt
 import math
 
 def export_drone_tether_ode_model() -> AcadosModel:
@@ -91,7 +91,7 @@ def export_drone_tether_ode_model() -> AcadosModel:
     params = vertcat(vx_b, vy_b, vz_b, p, q, r)#, theta_s, phi_s)
 
     # spherical angles
-    theta_s = atan2((x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
+    theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
     phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
@@ -172,22 +172,22 @@ def export_drone_tether_ode_model() -> AcadosModel:
 
 def export_drone_tether_ode_model_gpt() -> AcadosModel:
 
-    model_name = 'drone_tether_ode_v2'
+    model_name = 'drone_tether_ode_gpt'
 
     # constants
     g = 9.81 # gravity constant [m/s^2]
     # drone
     m_ce = 0.5 # mass of the center of the drone [kg]
     r_ce = 0.1 # approximated radius of the center of the drone  [m]
-    m_ro = 0.5 # mass of one rotor [kg]
-    n_ro = 6 # number of rotors
-    m_dr = 1.5 # mass of the drone [kg]
-    l_dr = 0.8 # length of arm of the drone [m]
-    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
+    m_ro = 0.1 # mass of one rotor [kg]
+    n_ro = 8 # number of rotors
+    m_dr = 1.3 # mass of the drone [kg]
+    l_dr = 0.2 # length of arm of the drone [m]
+    k_t = 50 #0.373 # pwm to thrust conversion factor, RANDOM
     # tether
-    rho_te = 0.1 # density of the tether [kg/m^3]
+    rho_te = 970 # density of the tether [kg/m^3]
     A_te = 0.01 # cross-sectional area of the tether [m^2]
-    tau_l = 10.0 # time constant of the tether length, RANDOM [s]
+    tau_l = 1.2 # time constant of the tether length, RANDOM [s]
 
     # Compute moments of inertia
     j_sphere = (1/2)*m_ce*r_ce**2
@@ -241,15 +241,13 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     tau_x = SX.sym('tau_x') # Normalized thrust command
     tau_y = SX.sym('tau_y') # roll command [rad]
     tau_z = SX.sym('tau_z') # pitch command [rad]
-    t = SX.sym('t') # pitch command [rad]
+    t = SX.sym('t') # thrust command in PWM
     l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
     u = vertcat(tau_x, tau_y, tau_z, t, l_tet_cmd)
 
-    # params = vertcat(vx_b, vy_b, vz_b, p, q, r)#, theta_s, phi_s)
-
     # spherical angles
-    theta_s = atan2((x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
+    theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
     phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
@@ -288,32 +286,21 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     Rw_bw[2, 1] = s_phi/c_theta
     Rw_bw[2, 2] = c_phi/c_theta
 
-    # Rotation matrix for angular velocity ZYX
-    Rw_wb = SX.zeros(3, 3)
-    Rw_wb[0, 0] = 1
-    Rw_wb[0, 1] = 0
-    Rw_wb[0, 2] = -s_theta
-    Rw_wb[1, 0] = 0
-    Rw_wb[1, 1] = c_phi
-    Rw_wb[1, 2] = s_phi*c_theta
-    Rw_wb[2, 0] = 0
-    Rw_wb[2, 1] = -s_phi
-    Rw_wb[2, 2] = c_phi*c_theta
-
     # Force propellers
     e_prop = vertcat(0, 0, 1) # body frame unit vector in the direction of the thrust
     F_prop = k_t*t*R_bw @ e_prop # thrust force in world frame
 
     # Force tether
-    e_tet = -vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    e_tet = vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
-    F_tet = rho_te*A_te*l_tet*g*e_tet # tether force in world frame
+    F_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
+    # gravity
+    gravity = vertcat(0, 0, -g) # gravity force in world frame
 
     # dynamics
-
     f_expl = vertcat(vx_w, vy_w, vz_w,
                      Rw_bw @ vertcat(p, q, r),
-                     1/m_dr*F_prop + F_tet,
+                     gravity + 1/m_dr*(F_prop - F_tet),
                      1/J[0, 0]*(tau_x - (J[2, 2] - J[1, 1])*q*r),
                      1/J[1, 1]*(tau_y - (J[0, 0] - J[2, 2])*p*r),
                      1/J[2, 2]*(tau_z - (J[1, 1] - J[0, 0])*p*q),
