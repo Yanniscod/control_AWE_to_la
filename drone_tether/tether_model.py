@@ -355,9 +355,8 @@ def export_drone_tether_fo_model() -> AcadosModel:
     vx_w        = SX.sym('vx_w')
     vy_w        = SX.sym('vy_w')
     vz_w        = SX.sym('vz_w')
-    l_tet       = SX.sym('l_tet')
 
-    x = vertcat(x_w, y_w, z_w, phi, theta, psi, vx_w, vy_w, vz_w, l_tet)
+    x = vertcat(x_w, y_w, z_w, phi, theta, psi, vx_w, vy_w, vz_w)
 
     # xdot
     x_dot       = SX.sym('x_dot')
@@ -369,18 +368,16 @@ def export_drone_tether_fo_model() -> AcadosModel:
     vx_dot      = SX.sym('vx_dot')
     vy_dot      = SX.sym('vy_dot')
     vz_dot      = SX.sym('vz_dot')
-    l_tet_dot   = SX.sym('l_tet_dot')
 
-    xdot = vertcat(x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot, vx_dot, vy_dot, vz_dot, l_tet_dot)
+    xdot = vertcat(x_dot, y_dot, z_dot, phi_dot, theta_dot, psi_dot, vx_dot, vy_dot, vz_dot)
 
     # input u
     phi_cmd = SX.sym('phi_cmd') # Normalized thrust command
     theta_cmd = SX.sym('theta_cmd') # roll command [rad]
     psi_cmd = SX.sym('psi_cmd') # pitch command [rad]
     thrust = SX.sym('thrust') # thrust command in PWM
-    l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
-    u = vertcat(phi_cmd, theta_cmd, psi_cmd, thrust, l_tet_cmd)
+    u = vertcat(phi_cmd, theta_cmd, psi_cmd, thrust)
 
     c_phi = cos(phi)
     s_phi = sin(phi)
@@ -416,7 +413,6 @@ def export_drone_tether_fo_model() -> AcadosModel:
                      gravity[0] + 1/m_dr*F_prop[0],
                      gravity[1] + 1/m_dr*F_prop[1],
                      gravity[2] + 1/m_dr*F_prop[2],
-                     1/tau_l*(l_tet - l_tet_cmd)
                      )
 
     f_impl = xdot - f_expl
