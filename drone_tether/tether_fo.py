@@ -6,41 +6,71 @@ from utils import plot_drone_tet_fo_eval
 from casadi import SX, vertcat, Function, sqrt, fmax, sin, cos, pi
 import time
 
-def solve_ocp():
+def set_init_values(mpc_model='attitude-fo'):
+    x0, u0 = None, None
+    if mpc_model=='attitude-fo':
+            x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            u0 = np.array([0.0, 0.0, 0.0, 0.5])
+    return x0, u0
+
+def set_constraints_model(mpc_model='attitude-fo'):
+    lbu, ubu = None, None
+    lbx, ubx = None, None
+    if mpc_model == 'attitude-fo':
+        lbu = np.array([-pi/4, -pi/4, -pi, 0.0])
+        ubu = np.array([pi/4, pi/4, pi, 1.0])
+        lbx = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
+            -pi, -10.0, -10.0, -10.0])
+        ubx = np.array([+200.0, +200.0, +200.0, +pi/4, +pi/4,
+            +pi, +10.0, +10.0, +10.0])
+    else:
+        print('Wrong model name')
+
+    return lbu, ubu, lbx, ubx
+
+def set_cost_model(Q, R, mpc_model='attitude-fo'):
+    if mpc_model == 'attitude-fo':
+        Q[0,0] = 10.0     # x
+        Q[1,1] = 10.0     # y
+        Q[2,2] = 10.0        # z
+        Q[3,3] = 1.0     # phi
+        Q[4,4] = 1.0     # theta
+        Q[5,5] = 1.0     # psi
+        Q[6,6] = 1.0       # vwx
+        Q[7,7] = 1.0        # vwy
+        Q[8,8] = 1.0        # vwz
+
+        R[0,0] = 1.0    # phi_cmd
+        R[1,1] = 1.0    # theta_cmd
+        R[2,2] = 1.0    # psi_cmd
+        R[3,3] = 10.0    # thrust
+    else:
+        print('Wrong model name')
+    
+    return Q, R
+    
+def solve_ocp(mpc_model='attitude-fo'):
     ocp = AcadosOcp()
 
     # set model
-    model = export_drone_tether_fo_model()
+    model = None
+    if mpc_model=='attitude-fo':
+        model = export_drone_tether_fo_model()
     ocp.model = model
 
     Tf = 1.0
+    N = 40 # horizon
     nx = model.x.rows()
     nu = model.u.rows()
     ny = nx + nu
     ny_e = nx
-    N = 40 # horizon
-
-    # set dimensions
+    nsim = 10 # number of simulations
     ocp.solver_options.N_horizon = N
 
-    # State cost
+    # Set costs
     Q = np.eye(nx)
-    Q[0,0] = 10.0     # x
-    Q[1,1] = 10.0     # y
-    Q[2,2] = 10.0        # z
-    Q[3,3] = 1.0     # phi
-    Q[4,4] = 1.0     # theta
-    Q[5,5] = 1.0     # psi
-    Q[6,6] = 1.0       # vwx
-    Q[7,7] = 1.0        # vwy
-    Q[8,8] = 1.0        # vwz
-
-    # Input cost
     R = np.eye(nu)
-    R[0,0] = 1.0    # phi_cmd
-    R[1,1] = 1.0    # theta_cmd
-    R[2,2] = 1.0    # psi_cmd
-    R[3,3] = 10.0    # thrust
+    Q, R = set_cost_model(Q, R, mpc_model)
 
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
     ocp.cost.W_e = 50*scipy.linalg.block_diag(Q)
@@ -48,38 +78,38 @@ def solve_ocp():
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-    pose_ref = np.array([0.0, 0.0, 1.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([0.0, 0.0, 1.0]) # x_w, y_w, z_w
 
     yref = np.zeros((ny, ))
-    yref[0] = pose_ref[0] # x_w
-    yref[1] = pose_ref[1] # y_w
-    yref[2] = pose_ref[2] # z_w
+    yref[0] = init_pose_ref[0] # x_w
+    yref[1] = init_pose_ref[1] # y_w
+    yref[2] = init_pose_ref[2] # z_w
     ocp.cost.yref = yref
     yref_e = np.zeros((ny_e, ))
-    yref_e[0] = pose_ref[0] # x_w
-    yref_e[1] = pose_ref[1] # y_w
-    yref_e[2] = pose_ref[2] # z_w
+    yref_e[0] = init_pose_ref[0] # x_w
+    yref_e[1] = init_pose_ref[1] # y_w
+    yref_e[2] = init_pose_ref[2] # z_w
     ocp.cost.yref_e = yref_e
 
     ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
     ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
     # set constraints
-    ocp.constraints.lbu = np.array([-pi/4, -pi/4, -pi, 0.0])
-    ocp.constraints.ubu = np.array([pi/4, pi/4, pi, 1.0])
+    lbu, ubu, lbx, ubx = set_constraints_model(mpc_model)
+    print('1', np.size(lbx))
+
+    lbx2 = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
+            -pi, -10.0, -10.0, -10.0])
+    print('2', np.size(lbx2))
+    ocp.constraints.lbu = lbu
+    ocp.constraints.ubu = ubu
     ocp.constraints.idxbu = np.arange(nu)
 
-    x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    ocp.constraints.x0 = x0
-    u0 = np.array([0.0, 0.0, 0.0, 0.5])
-    ocp.constraints.lbx = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
-        -pi, -10.0, -10.0, -10.0])
-    ocp.constraints.ubx = np.array([+200.0, +200.0, +200.0, +pi/4, +pi/4,
-        +pi, +10.0, +10.0, +10.0])
-    ocp.constraints.idxbx = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    ocp.constraints.lbx = lbx
+    ocp.constraints.ubx = ubx
+    ocp.constraints.idxbx = np.arange(nx)
 
-    # set options
-    # ocp.solver_options.print_level = 3
+    # set options, not differentiating between models atm
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.integrator_type = 'ERK'
@@ -92,19 +122,23 @@ def solve_ocp():
     simX = np.zeros((N+1, nx))
     simU = np.zeros((N, nu))
 
+    x0, u0 = set_init_values(mpc_model)
+    ocp.constraints.x0 = x0
+
     x_init = x0 # would be from sensor x_init = get_state_from_px4()
     u_init = u0 # just initial guess for input
     for i in range(N):
         ocp_solver.set(i, "x", x_init)
         ocp_solver.set(i, "u", u_init)
     ocp_solver.set(N, "x", x_init)
-    nsim = 10
     print("x0:", x_init)
     print("u0:", u_init)
     theta_ref = 0.0
     for nsim in range(nsim):
         # constraints state
         # x_init = get_state_from_px4()
+        print(lbx)
+        print(x_init)
         ocp_solver.constraints_set(0, 'lbx', x_init) # == data from sensor
         ocp_solver.constraints_set(0, 'ubx', x_init)
 
