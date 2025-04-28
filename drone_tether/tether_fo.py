@@ -78,12 +78,6 @@ def solve_ocp():
         +pi, +10.0, +10.0, +10.0])
     ocp.constraints.idxbx = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
-    # f_expl_fun = Function("f_expl_fun", [model.x, model.u], [model.f_expl_expr])
-    # print("f_expl at x0:", f_expl_fun(x0, u0))
-
-    # cost_y_fun = Function("cost_y_fun", [model.x, model.u], [model.cost_y_expr])
-    # print("cost_y_expr at x0:", cost_y_fun(x0, u0))
-
     # set options
     # ocp.solver_options.print_level = 3
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
@@ -110,9 +104,11 @@ def solve_ocp():
     theta_ref = 0.0
     for nsim in range(nsim):
         # constraints state
+        # x_init = get_state_from_px4()
         ocp_solver.constraints_set(0, 'lbx', x_init) # == data from sensor
         ocp_solver.constraints_set(0, 'ubx', x_init)
 
+        # yref = get_target_from_px4()
         # set circular ref
         yref[0] = 1.0*cos(theta_ref)
         yref[1] = 1.0*sin(theta_ref)
@@ -148,8 +144,6 @@ def solve_ocp():
         print("new x0:", x_init)
         print("new u0:", u_init)
         theta_ref += 0.01
-
-        # ocp_solver.print_statistics() # encapsulates: stat = ocp_solver.get_stats("statistics")
 
     plot_drone_tet_fo_eval(np.linspace(0, Tf, N+1), pi/4, simU, simX, latexify=True)
 
