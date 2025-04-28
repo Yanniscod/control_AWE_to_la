@@ -3,7 +3,7 @@ from tether_model import export_drone_tether_ode_model_gpt
 import numpy as np
 import scipy.linalg
 from utils import plot_drone_tet_eval
-from casadi import SX, vertcat, Function
+from casadi import SX, vertcat, Function, sqrt, fmax
 
 # create ocp object to formulate the OCP
 ocp = AcadosOcp()
@@ -16,13 +16,15 @@ Tf = 1.0
 nx = model.x.rows()
 nu = model.u.rows()
 ny = nx + nu
-ny_e = nx
-N = 70
+add_penalty = True
+npen = 1 # for l_tet
+ny_e = nx + npen
+N = 50
 
 # set dimensions
 ocp.solver_options.N_horizon = N
 
-# set cost
+############ Set cost
 Q = np.eye(nx)
 Q[0,0] = 1.0e-3       # x
 Q[1,1] = 1.0e-3     # y
@@ -45,53 +47,59 @@ R[2,2] = 0.06    # tauz
 R[3,3] = 0.06    # t
 R[4,4] = 0.3    # l_tet
 
-ocp.cost.W = scipy.linalg.block_diag(Q, R)
-ocp.cost.W_e = 50*Q
-
 ocp.cost.cost_type = 'NONLINEAR_LS'
 ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-ocp.cost.Vx = np.zeros((ny, nx))
-ocp.cost.Vx[:nx,:nx] = np.eye(nx)
+# Others: pen for l_tet < drone_dist
+if add_penalty:
+    I = 10*np.eye(npen)
+    ocp.cost.W = scipy.linalg.block_diag(Q, R, I)
+    ocp.cost.W_e = 50*scipy.linalg.block_diag(Q, I)
+    yref = np.zeros((ny+npen, ))
+else:
+    ocp.cost.W = scipy.linalg.block_diag(Q, R)
+    ocp.cost.W_e = 50*scipy.linalg.block_diag(Q)
+    yref = np.zeros((ny, ))
 
-Vu = np.zeros((ny, nu))
-Vu[nx:, :] = np.eye(nu)
-ocp.cost.Vu = Vu
-
-ocp.cost.Vx_e = np.eye(nx)
-
-x_w = model.x[0]
-y_w = model.x[1]
-z_w = model.x[2]
-dist_gs_drone = np.sqrt(x_w**2 + y_w**2 + z_w**2)
-epsilon = 0.3
-l_tet_ref = 0.0 #dist_gs_drone - epsilon
-
-yref = np.zeros((ny, ))
-yref[2] = 0.5 # z_w
-yref[12] = 0.0 # l_tet
-ocp.cost.yref = yref
 yref_e = np.zeros((ny_e, ))
+yref[2] = 0.5 # z_w
 yref_e[2] = 0.5 # z_w
-yref_e[12] = l_tet_ref # l_tet
+
+if add_penalty:
+    yref[13] = 0.0 # gap
+    yref_e[13] = 0.0 # l_tet
+
+    # l_tet penalty
+    x_w = model.x[0]
+    y_w = model.x[1]
+    z_w = model.x[2]
+    l_tether = model.x[9]
+    dist_gs_drone = sqrt(x_w**2 + y_w**2 + z_w**2)
+    penalty_l_tet = fmax(0, dist_gs_drone - l_tether - 0.1)
+    ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u, penalty_l_tet)
+    ocp.model.cost_y_expr_e = vertcat(ocp.model.x, penalty_l_tet)
+else:
+    ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
+    ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
+
+ocp.cost.yref = yref
 ocp.cost.yref_e = yref_e
 
-ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
-ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
-
-# set constraints
+############ Set input constraints
 tau_max = 50 # [N*m]
-l_tet_cmd_max = 100 # [m]
+l_tet_max = 50 # [m]
 l_tet_min = 0.1 # [m]
 ocp.constraints.lbu = np.array([0.0, 0.0, 0.0, 0.0, l_tet_min])
-ocp.constraints.ubu = np.array([tau_max, tau_max, tau_max, 1.0, l_tet_cmd_max])
+ocp.constraints.ubu = np.array([tau_max, tau_max, tau_max, 1.0, l_tet_max])
 ocp.constraints.idxbu = np.arange(nu)
 
+############ Set state constraints
 l_tet_init = 2.5
-ocp.constraints.x0 = np.array([0.2, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, l_tet_init])
-x0 = ocp.constraints.x0
+x0 = np.zeros((nx, ))
+x0[2] = 0.5
+x0[12] = l_tet_init
+ocp.constraints.x0 = x0
 u0 = np.array([0.4, 0.4, 0.4, 0.4, 2.0])
-l_tet_max = 50.0 # [m]
 ocp.constraints.lbx = np.array([-200.0, -200.0, 0.0, -np.pi/6, -np.pi/6,
     -np.pi, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, l_tet_min])
 ocp.constraints.ubx = np.array([+200.0, +200.0, +200.0, +np.pi/6, +np.pi/6,
@@ -110,13 +118,9 @@ ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOAS
 ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
 ocp.solver_options.integrator_type = 'ERK'
 ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
-
-# set prediction horizon
 ocp.solver_options.tf = Tf
 
-# use the CMake build pipeline
-cmake_builder = ocp_get_default_cmake_builder()
-
+############ Solve
 ocp_solver = AcadosOcpSolver(ocp)
 
 simX = np.zeros((N+1, nx))
@@ -126,9 +130,6 @@ for i in range(N):
     ocp_solver.set(i, "x", x0)
     ocp_solver.set(i, "u", u0)
 ocp_solver.set(N, "x", x0)
-
-# ocp_solver.set(0, "lbx", x0)
-# ocp_solver.set(0, "ubx", x0)
 
 status = ocp_solver.solve()
 

@@ -334,15 +334,15 @@ def export_drone_tether_fo_model() -> AcadosModel:
     # constants
     g = 9.81 # gravity constant [m/s^2]
     # drone
-    m_dr = 1.3 # mass of the drone [kg]
-    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
+    m_dr = 1.616 # mass of the drone [kg]
+    k_t = 41.93 #0.378 # pwm to thrust conversion factor
     # tether
     rho_te = 970 # density of the tether [kg/m^3]
     A_te = 0.00001 # cross-sectional area of the tether [m^2]
     tau_l = 1.2 # time constant of the tether length, RANDOM [s]
-    tau_phi = 0.1
-    tau_theta = 0.1
-    tau_psi = 0.1
+    tau_phi = 0.2
+    tau_theta = 0.3
+    tau_psi = 0.22
 
     # set up states & controls
     # state x
@@ -410,9 +410,9 @@ def export_drone_tether_fo_model() -> AcadosModel:
 
     # dynamics
     f_expl = vertcat(vx_w, vy_w, vz_w,
-                     1/tau_phi*(l_tet - l_tet_cmd),
-                     1/tau_theta*(l_tet - l_tet_cmd),
-                     1/tau_psi*(l_tet - l_tet_cmd),
+                     1/tau_phi*(phi - phi_cmd),
+                     1/tau_theta*(theta - theta_cmd),
+                     1/tau_psi*(psi -psi_cmd),
                      gravity[0] + 1/m_dr*F_prop[0],
                      gravity[1] + 1/m_dr*F_prop[1],
                      gravity[2] + 1/m_dr*F_prop[2],

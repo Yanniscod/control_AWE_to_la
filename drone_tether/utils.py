@@ -70,7 +70,7 @@ def plot_drone_tet_fo_eval(time, rpy_max, l_tet_min,  simU, simX, latexify=False
     # Plot thrust command
     axs[1].plot(time[:-1], simU[:, 3], label=r'$l_{\mathrm{thrust_{cmd}}}$')
     axs[1].axhline(l_tet_min, color='gray', linestyle='--', label='Thrust bound')
-    axs[1].set_ylabel("Thrust [0,1]")
+    axs[1].set_ylabel("Thrust cmd")
     axs[1].legend()
     axs[1].grid(True)
 
@@ -92,7 +92,6 @@ def plot_drone_tet_fo_eval(time, rpy_max, l_tet_min,  simU, simX, latexify=False
     axs[4].plot(time, simX[:, 1], label='y')
     axs[4].plot(time, simX[:, 2], label='z')
     axs[4].set_ylabel("Position [m]")
-    axs[4].set_xlabel("Time [s]")
     axs[4].legend()
     axs[4].grid(True)
 
@@ -100,7 +99,7 @@ def plot_drone_tet_fo_eval(time, rpy_max, l_tet_min,  simU, simX, latexify=False
     axs[5].plot(time, simX[:, 3], label='phi')
     axs[5].plot(time, simX[:, 4], label='theta')
     axs[5].plot(time, simX[:, 5], label='psi')
-    axs[5].set_ylabel("Orientation [deg]")
+    axs[5].set_ylabel("RPY [rad]")
     axs[5].set_xlabel("Time [s]")
     axs[5].legend()
     axs[5].grid(True)
