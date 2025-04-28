@@ -9,8 +9,8 @@ import time
 def set_init_values(mpc_model='attitude-fo'):
     x0, u0 = None, None
     if mpc_model=='attitude-fo':
-            x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-            u0 = np.array([0.0, 0.0, 0.0, 0.5])
+        x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        u0 = np.array([0.0, 0.0, 0.0, 0.5])
     return x0, u0
 
 def set_constraints_model(mpc_model='attitude-fo'):
@@ -32,13 +32,13 @@ def set_cost_model(Q, R, mpc_model='attitude-fo'):
     if mpc_model == 'attitude-fo':
         Q[0,0] = 10.0     # x
         Q[1,1] = 10.0     # y
-        Q[2,2] = 10.0        # z
-        Q[3,3] = 1.0     # phi
-        Q[4,4] = 1.0     # theta
-        Q[5,5] = 1.0     # psi
-        Q[6,6] = 1.0       # vwx
-        Q[7,7] = 1.0        # vwy
-        Q[8,8] = 1.0        # vwz
+        Q[2,2] = 10.0     # z
+        Q[3,3] = 1.0      # phi
+        Q[4,4] = 1.0      # theta
+        Q[5,5] = 1.0      # psi
+        Q[6,6] = 1.0      # vwx
+        Q[7,7] = 1.0      # vwy
+        Q[8,8] = 1.0      # vwz
 
         R[0,0] = 1.0    # phi_cmd
         R[1,1] = 1.0    # theta_cmd
@@ -96,11 +96,6 @@ def solve_ocp(mpc_model='attitude-fo'):
 
     # set constraints
     lbu, ubu, lbx, ubx = set_constraints_model(mpc_model)
-    print('1', np.size(lbx))
-
-    lbx2 = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
-            -pi, -10.0, -10.0, -10.0])
-    print('2', np.size(lbx2))
     ocp.constraints.lbu = lbu
     ocp.constraints.ubu = ubu
     ocp.constraints.idxbu = np.arange(nu)
@@ -108,6 +103,10 @@ def solve_ocp(mpc_model='attitude-fo'):
     ocp.constraints.lbx = lbx
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
+
+    x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    ocp.constraints.x0 = x0
+    u0 = np.array([0.0, 0.0, 0.0, 0.5])
 
     # set options, not differentiating between models atm
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
@@ -122,8 +121,8 @@ def solve_ocp(mpc_model='attitude-fo'):
     simX = np.zeros((N+1, nx))
     simU = np.zeros((N, nu))
 
-    x0, u0 = set_init_values(mpc_model)
-    ocp.constraints.x0 = x0
+    # x0, u0 = set_init_values(mpc_model) # not working due to x0 mismatch with lbx
+    # ocp.constraints.x0 = x0
 
     x_init = x0 # would be from sensor x_init = get_state_from_px4()
     u_init = u0 # just initial guess for input
