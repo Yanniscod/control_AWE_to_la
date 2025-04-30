@@ -11,10 +11,9 @@ def solve_ocp():
 
     model = None
     moving_ref = False
-    init_pose_ref = np.array([0.0, 0.0, 1.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([0.0, 0.0, 1.0, 0.0, 0.2, 1.0]) # x_w, y_w, z_w
 
     model = export_drone_tether_ode_model_gpt()
-    npen = 1
     ocp.model = model
 
     Tf = 1.0
@@ -32,9 +31,9 @@ def solve_ocp():
     Q[0,0] = 10.0     # x
     Q[1,1] = 10.0     # y
     Q[2,2] = 10.0     # z
-    Q[3,3] = 1.0      # phi
-    Q[4,4] = 1.0      # theta
-    Q[5,5] = 1.0      # psi
+    Q[3,3] = 10.0      # phi
+    Q[4,4] = 10.0      # theta
+    Q[5,5] = 4.0      # psi
     Q[6,6] = 1.0      # vwx
     Q[7,7] = 1.0      # vwy
     Q[8,8] = 1.0      # vwz
@@ -49,32 +48,41 @@ def solve_ocp():
     R[3,3] = 10.0   # thrust
     R[4,4] = 1.0    # l_tet_cmd
 
-    I = np.eye(npen)
-    I[0,0] = 75.0    # l_pen
-
-    ocp.cost.W = scipy.linalg.block_diag(Q, R, I)
-    ocp.cost.W_e = 20*scipy.linalg.block_diag(Q, I)
+    ocp.cost.W = scipy.linalg.block_diag(Q, R)
+    ocp.cost.W_e = 40*scipy.linalg.block_diag(Q)
 
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
 
-    yref = np.zeros((ny+npen, ))
+    yref = np.zeros((ny, ))
     yref[0] = init_pose_ref[0] # x_w
     yref[1] = init_pose_ref[1] # y_w
     yref[2] = init_pose_ref[2] # z_w
+    yref[3] = init_pose_ref[3] # phi
+    yref[4] = init_pose_ref[4] # theta
+    yref[5] = init_pose_ref[5] # psi
     ocp.cost.yref = yref
-    yref_e = np.zeros((ny_e+npen, ))
+    yref_e = np.zeros((ny_e, ))
     yref_e[0] = init_pose_ref[0] # x_w
     yref_e[1] = init_pose_ref[1] # y_w
     yref_e[2] = init_pose_ref[2] # z_w
+    yref_e[3] = init_pose_ref[3] # phi
+    yref_e[4] = init_pose_ref[4] # theta
+    yref_e[5] = init_pose_ref[5] # psi
     ocp.cost.yref_e = yref_e
+    ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
+    ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
-    eps = 0.05
-    margin = sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2]**2) - (model.x[12] - eps)
-    k = 20 # for softplus
-    len_tet_pen = log(1 + exp(k * margin)) / k
-    ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u, len_tet_pen)
-    ocp.model.cost_y_expr_e = vertcat(ocp.model.x, len_tet_pen)
+    tet_sag_eps = 0.05 # margin to have some slack and not a full taught tether
+    dist_gs_drone = sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2])
+    tet_constraint = model.x[12] - dist_gs_drone - tet_sag_eps
+    ocp.model.con_h_expr = vertcat(tet_constraint)
+    ocp.constraints.lh = np.array([0.0])
+    ocp.constraints.uh = np.array([50.0])
+
+    ocp.model.con_h_expr_e = vertcat(tet_constraint)
+    ocp.constraints.lh_e = np.array([0.0])
+    ocp.constraints.uh_e = np.array([10.0])
 
     # set constraints
     lbu = np.array([0.0, 0.0, 0.0, 0.0, 0.1])
@@ -91,15 +99,15 @@ def solve_ocp():
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
     
-    x0 = np.array([0.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0., 0.0, 0.0, 0.0, 0.5])
-    u0 = np.array([0.0, 0.0, 0.0, 0.4, 0.5])
+    x0 = np.array([0.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0., 0.0, 0.0, 0.0, 0.7])
+    u0 = np.array([0.0, 0.0, 0.0, 0.4, 0.7])
     ocp.constraints.x0 = x0
 
     # set options, not differentiating between models atm
-    ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
+    ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM' # FULL_CONDENSING_QPOASES
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.integrator_type = 'ERK'
-    ocp.solver_options.nlp_solver_type = 'SQP_RTI' # SQP_RTI, SQP
+    ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
     ocp.solver_options.tf = Tf
     # ocp.solver_options.tol = 1e-4
 
@@ -120,8 +128,6 @@ def solve_ocp():
         # x_init = get_state_from_px4()
         ocp_solver.constraints_set(0, 'lbx', x0) # == data from sensor
         ocp_solver.constraints_set(0, 'ubx', x0)
-        # ocp_solver.constraints_set(0, 'lbu', u0) # == force start at u0
-        # ocp_solver.constraints_set(0, 'ubu', u0)
 
         # yref = get_target_from_px4()
         # set circular ref

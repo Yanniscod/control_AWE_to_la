@@ -245,9 +245,9 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
     u = vertcat(tau_x, tau_y, tau_z, thrust, l_tet_cmd)
-
+    eps = 0.001
     # spherical angles
-    theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
+    theta_s = atan2(sqrt(x_w**2 + y_w**2+eps), z_w**2) # world frame polar angle of the tether [rad]
     phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
@@ -291,19 +291,17 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     F_prop = k_t*thrust*R_bw @ e_prop # thrust force in world frame
 
     # Force tether
-    e_tet = vertcat(0, 0, 0)#(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    e_tet = vertcat(0, 0, 0)#s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
     F_grav_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
-    drone_dist = sqrt(x_w**2+y_w**2+z_w**2)
-    F_spring_tet = fmax(0, kp*(drone_dist - l_tet) / l_tet)
-    F_tet = F_grav_tet + F_spring_tet
+    F_tet = F_grav_tet
     # gravity
     gravity = vertcat(0, 0, -g) # gravity force in world frame
 
     # dynamics
     f_expl = vertcat(vx_w, vy_w, vz_w,
                      Rw_bw @ vertcat(p, q, r),
-                     gravity + 1/m_dr*(F_prop - F_tet),
+                     gravity + 1/m_dr*(F_prop),
                      1/J[0, 0]*(tau_x - (J[2, 2] - J[1, 1])*q*r),
                      1/J[1, 1]*(tau_y - (J[0, 0] - J[2, 2])*p*r),
                      1/J[2, 2]*(tau_z - (J[1, 1] - J[0, 0])*p*q),
