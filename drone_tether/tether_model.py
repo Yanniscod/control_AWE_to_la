@@ -1,5 +1,5 @@
 from acados_template import AcadosModel
-from casadi import SX, vertcat, sin, cos, tan, atan2, sqrt
+from casadi import SX, vertcat, sin, cos, tan, atan2, sqrt, fmax
 import math
 
 def export_drone_tether_ode_model() -> AcadosModel:
@@ -187,8 +187,8 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     # tether
     rho_te = 970 # density of the tether [kg/m^3]
     A_te = 0.00001 # cross-sectional area of the tether [m^2]
-    tau_l = 1.2 # time constant of the tether length, RANDOM [s]
-
+    tau_l = 0.4 # time constant of the tether length, RANDOM [s]
+    kp = 6.76e6
     # Compute moments of inertia
     j_sphere = (1/2)*m_ce*r_ce**2
     j_motors = n_ro * m_ro*(l_dr**2)
@@ -293,7 +293,10 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     # Force tether
     e_tet = vertcat(0, 0, 0)#(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
-    F_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
+    F_grav_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
+    drone_dist = sqrt(x_w**2+y_w**2+z_w**2)
+    F_spring_tet = fmax(0, kp*(drone_dist - l_tet) / l_tet)
+    F_tet = F_grav_tet + F_spring_tet
     # gravity
     gravity = vertcat(0, 0, -g) # gravity force in world frame
 

@@ -17,6 +17,7 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[0,0].set_ylabel("tau input [Nm]")
     axs[0,0].legend()
     axs[0,0].grid(True)
+    axs[0,0].set_title('Input commands')
 
     # Plot thrust input
     axs[1,0].plot(time[:-1], simU[:, 3], label=r'$thrust$')
@@ -33,7 +34,7 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[2,0].set_ylabel("Tether Length [m]")
     axs[2,0].legend()
     axs[2,0].grid(True)
-    fig.suptitle('Input commands', fontsize=14)
+    # fig.suptitle('Input commands', fontsize=14)
 
     #################### STATES ####################
     # Plot drone position
@@ -43,6 +44,7 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[0,1].set_ylabel("Position [m]")
     axs[0,1].legend()
     axs[0,1].grid(True)
+    axs[0,1].set_title('States')
 
     # Plot drone orientation
     axs[1,1].plot(time, simX[:, 3], label='phi')
@@ -58,7 +60,6 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[2,1].set_xlabel("Time [s]")
     axs[2,1].legend()
     axs[2,1].grid(True)
-    fig.suptitle('States', fontsize=14)
 
     plt.tight_layout()
     plt.show()
