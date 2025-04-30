@@ -3,7 +3,7 @@ from tether_model import export_drone_tether_ode_model_gpt
 import numpy as np
 import scipy.linalg
 from utils import plot_drone_tet_gpt_eval
-from casadi import vertcat, sin, cos, pi, sqrt, fmax, log, exp
+from casadi import vertcat, sin, cos, pi, sqrt, fmax, log, exp, if_else
 import time
 
 def solve_ocp():

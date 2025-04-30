@@ -1,5 +1,5 @@
 from acados_template import AcadosModel
-from casadi import SX, vertcat, sin, cos, tan, atan2, sqrt, fmax
+from casadi import SX, vertcat, sin, cos, tan, atan2, sqrt, fmax, if_else, fabs
 import math
 
 def export_drone_tether_ode_model() -> AcadosModel:
@@ -91,8 +91,9 @@ def export_drone_tether_ode_model() -> AcadosModel:
     params = vertcat(vx_b, vy_b, vz_b, p, q, r)#, theta_s, phi_s)
 
     # spherical angles
-    theta_s = atan2(sqrt(x_w**2 + y_w**2), z_w**2) # world frame polar angle of the tether [rad]
-    phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
+    eps = 1e-8
+    theta_s = atan2(sqrt(x_w**2 + y_w**2), if_else(z_w**2 < eps, eps, z_w**2)) # world frame polar angle of the tether [rad]
+    phi_s = atan2(y_w, if_else(fabs(x_w) < eps, eps, x_w)) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
     s_phi = sin(phi)
@@ -245,10 +246,12 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     l_tet_cmd = SX.sym('l_tet_cmd') # length of the tether [m]
 
     u = vertcat(tau_x, tau_y, tau_z, thrust, l_tet_cmd)
-    eps = 0.001
+
     # spherical angles
-    theta_s = atan2(sqrt(x_w**2 + y_w**2+eps), z_w**2) # world frame polar angle of the tether [rad]
-    phi_s = atan2(y_w, x_w) # world frame azimutal angle of the tether [rad]
+    eps = 1e-8
+    theta_s = atan2(if_else(sqrt(x_w**2 + y_w**2) < eps, eps, sqrt(x_w**2 + y_w**2)),
+                     if_else(z_w**2 < eps, eps, z_w**2)) # world frame polar angle of the tether [rad]
+    phi_s = atan2(y_w, if_else(fabs(x_w) < eps, eps, x_w)) # world frame azimutal angle of the tether [rad]
 
     c_phi = cos(phi)
     s_phi = sin(phi)
@@ -291,7 +294,7 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     F_prop = k_t*thrust*R_bw @ e_prop # thrust force in world frame
 
     # Force tether
-    e_tet = vertcat(0, 0, 0)#s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
+    e_tet = vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
     # NOT CONSIDERING WINCH FORCE ATM
     F_grav_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
     F_tet = F_grav_tet
@@ -301,7 +304,7 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
     # dynamics
     f_expl = vertcat(vx_w, vy_w, vz_w,
                      Rw_bw @ vertcat(p, q, r),
-                     gravity + 1/m_dr*(F_prop),
+                     gravity + 1/m_dr*(F_prop - F_tet),
                      1/J[0, 0]*(tau_x - (J[2, 2] - J[1, 1])*q*r),
                      1/J[1, 1]*(tau_y - (J[0, 0] - J[2, 2])*p*r),
                      1/J[2, 2]*(tau_z - (J[1, 1] - J[0, 0])*p*q),
