@@ -176,14 +176,14 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
 
     # constants
     g = 9.81 # gravity constant [m/s^2]
-    # drone
+    # drone (based on tarot680 sim model)
     m_ce = 0.5 # mass of the center of the drone [kg]
-    r_ce = 0.1 # approximated radius of the center of the drone  [m]
-    m_ro = 0.1 # mass of one rotor [kg]
-    n_ro = 8 # number of rotors
-    m_dr = 1.3 # mass of the drone [kg]
-    l_dr = 0.2 # length of arm of the drone [m]
-    k_t = 40 #0.373 # pwm to thrust conversion factor, RANDOM
+    r_ce = 0.2 # approximated radius of the center of the drone  [m]
+    m_ro = 0.005 # mass of one rotor [kg]
+    n_ro = 6 # number of rotors
+    m_dr = 1.616 # mass of the drone [kg]
+    l_dr = 0.43 # length of arm of the drone [m]
+    k_t = 41.93 #0.373 # pwm to thrust conversion factor, RANDOM
     # tether
     rho_te = 970 # density of the tether [kg/m^3]
     A_te = 0.00001 # cross-sectional area of the tether [m^2]
@@ -327,7 +327,7 @@ def export_drone_tether_ode_model_gpt() -> AcadosModel:
 
     return model
 
-def export_drone_tether_fo_model() -> AcadosModel:
+def export_drone_fo_model() -> AcadosModel:
 
     model_name = 'drone_tether_fo_model'
 
@@ -336,15 +336,11 @@ def export_drone_tether_fo_model() -> AcadosModel:
     # drone
     m_dr = 1.616 # mass of the drone [kg]
     k_t = 41.93 #0.378 # pwm to thrust conversion factor
-    # tether
-    rho_te = 970 # density of the tether [kg/m^3]
-    A_te = 0.00001 # cross-sectional area of the tether [m^2]
-    tau_l = 1.2 # time constant of the tether length, RANDOM [s]
+    # dynamics
     tau_phi = 0.2
     tau_theta = 0.3
     tau_psi = 0.22
 
-    # set up states & controls
     # state x
     x_w         = SX.sym('x_w')
     y_w         = SX.sym('y_w')

@@ -1,16 +1,19 @@
-from acados_template import AcadosOcp, AcadosOcpSolver, ocp_get_default_cmake_builder
-from tether_model import export_drone_tether_fo_model
+from acados_template import AcadosOcp, AcadosOcpSolver
+from tether_model import export_drone_fo_model, export_drone_tether_ode_model_gpt
 import numpy as np
 import scipy.linalg
-from utils import plot_drone_tet_fo_eval
-from casadi import SX, vertcat, Function, sqrt, fmax, sin, cos, pi
+from utils import plot_drone_tet_fo_eval, plot_drone_tet_gpt_eval
+from casadi import vertcat, sin, cos, pi, sqrt, fmax
 import time
 
 def set_init_values(mpc_model='attitude-fo'):
     x0, u0 = None, None
     if mpc_model=='attitude-fo':
         x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        u0 = np.array([0.0, 0.0, 0.0, 0.5])
+        u0 = np.array([0.0, 0.0, 0.0, 0.4])
+    elif mpc_model=='attitude-gpt':
+        x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5])
+        u0 = np.array([0.0, 0.0, 0.0, 0.4, 0.5])
     return x0, u0
 
 def set_constraints_model(mpc_model='attitude-fo'):
@@ -23,6 +26,13 @@ def set_constraints_model(mpc_model='attitude-fo'):
             -pi, -10.0, -10.0, -10.0])
         ubx = np.array([+200.0, +200.0, +200.0, +pi/4, +pi/4,
             +pi, +10.0, +10.0, +10.0])
+    elif mpc_model == 'attitude-gpt':
+        lbu = np.array([0.0, 0.0, 0.0, 0.0, 0.1])
+        ubu = np.array([5.0, 5.0, 5.0, 1.0, 40.0])
+        lbx = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
+            -pi, -10.0, -10.0, -10.0,-10.0, -10.0, -10.0, 0.1])
+        ubx = np.array([+200.0, +200.0, +200.0, +pi/4, +pi/4,
+            +pi, +10.0, +10.0, +10.0, +10.0, +10.0, +10.0, +50.0])
     else:
         print('Wrong model name')
 
@@ -44,6 +54,28 @@ def set_cost_model(Q, R, mpc_model='attitude-fo'):
         R[1,1] = 1.0    # theta_cmd
         R[2,2] = 1.0    # psi_cmd
         R[3,3] = 10.0    # thrust
+    elif mpc_model=='attitude-gpt':
+        Q[0,0] = 10.0     # x
+        Q[1,1] = 10.0     # y
+        Q[2,2] = 10.0     # z
+        Q[3,3] = 1.0      # phi
+        Q[4,4] = 1.0      # theta
+        Q[5,5] = 1.0      # psi
+        Q[6,6] = 1.0      # vwx
+        Q[7,7] = 1.0      # vwy
+        Q[8,8] = 1.0      # vwz
+        Q[9,9] = 1.0      # p
+        Q[10,10] = 1.0    # q
+        Q[11,11] = 1.0    # r
+        Q[12,12] = 1.0    # l_tet
+
+        R[0,0] = 1.0    # tau_phi_cmd
+        R[1,1] = 1.0    # tau_theta_cmd
+        R[2,2] = 1.0    # tau_psi_cmd
+        R[3,3] = 10.0   # thrust
+        R[4,4] = 1.0    # l_tet_cmd
+        R[5,5] = 1.0    # l_pen
+
     else:
         print('Wrong model name')
     
@@ -55,11 +87,15 @@ def solve_ocp(mpc_model='attitude-fo'):
     # set model
     model = None
     if mpc_model=='attitude-fo':
-        model = export_drone_tether_fo_model()
+        model = export_drone_fo_model()
+        npen = 0
+    elif mpc_model=='attitude-gpt':
+        model = export_drone_tether_ode_model_gpt()
+        npen = 1
     ocp.model = model
 
     Tf = 1.0
-    N = 40 # horizon
+    N = 50 # horizon
     nx = model.x.rows()
     nu = model.u.rows()
     ny = nx + nu
@@ -69,7 +105,7 @@ def solve_ocp(mpc_model='attitude-fo'):
 
     # Set costs
     Q = np.eye(nx)
-    R = np.eye(nu)
+    R = np.eye(nu+npen)
     Q, R = set_cost_model(Q, R, mpc_model)
 
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
@@ -80,10 +116,14 @@ def solve_ocp(mpc_model='attitude-fo'):
 
     init_pose_ref = np.array([0.0, 0.0, 1.0]) # x_w, y_w, z_w
 
-    yref = np.zeros((ny, ))
+    yref = np.zeros((ny+npen, ))
     yref[0] = init_pose_ref[0] # x_w
     yref[1] = init_pose_ref[1] # y_w
     yref[2] = init_pose_ref[2] # z_w
+    cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
+    if mpc_model == 'attitude-gpt':
+        len_tet_pen = (sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2]**2) - (model.x[12] - 0.1))
+        cost_y_expr = vertcat(ocp.model.x, ocp.model.u, len_tet_pen)
     ocp.cost.yref = yref
     yref_e = np.zeros((ny_e, ))
     yref_e[0] = init_pose_ref[0] # x_w
@@ -91,7 +131,7 @@ def solve_ocp(mpc_model='attitude-fo'):
     yref_e[2] = init_pose_ref[2] # z_w
     ocp.cost.yref_e = yref_e
 
-    ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
+    ocp.model.cost_y_expr = cost_y_expr
     ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
     # set constraints
@@ -104,9 +144,9 @@ def solve_ocp(mpc_model='attitude-fo'):
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
 
-    x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    x0 = np.array([0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.5])
     ocp.constraints.x0 = x0
-    u0 = np.array([0.0, 0.0, 0.0, 0.5])
+    u0 = np.array([0.0, 0.0, 0.0, 0.4, 0.5])
 
     # set options, not differentiating between models atm
     ocp.solver_options.qp_solver = 'FULL_CONDENSING_QPOASES' # FULL_CONDENSING_QPOASES
@@ -114,7 +154,7 @@ def solve_ocp(mpc_model='attitude-fo'):
     ocp.solver_options.integrator_type = 'ERK'
     ocp.solver_options.nlp_solver_type = 'SQP_RTI' # SQP_RTI, SQP
     ocp.solver_options.tf = Tf
-    ocp.solver_options.tol = 1e-4
+    # ocp.solver_options.tol = 1e-4
 
     ocp_solver = AcadosOcpSolver(ocp)
 
@@ -130,8 +170,6 @@ def solve_ocp(mpc_model='attitude-fo'):
         ocp_solver.set(i, "x", x_init)
         ocp_solver.set(i, "u", u_init)
     ocp_solver.set(N, "x", x_init)
-    print("x0:", x_init)
-    print("u0:", u_init)
     theta_ref = 0.0
     for nsim in range(nsim):
         # constraints state
@@ -146,6 +184,8 @@ def solve_ocp(mpc_model='attitude-fo'):
         yref[0] = 1.0*cos(theta_ref)
         yref[1] = 1.0*sin(theta_ref)
         yref[2] = 1.0
+        # if mpc_model == 'attitude-gpt':
+            # yref[13] = (sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2]**2) - (model.x[12] - 0.1))
         for i in range(N):
             ocp_solver.set(i, "yref", yref)
         ocp_solver.set(N, "yref", yref[:nx])
@@ -178,7 +218,10 @@ def solve_ocp(mpc_model='attitude-fo'):
         print("new u0:", u_init)
         theta_ref += 0.01
 
-    plot_drone_tet_fo_eval(np.linspace(0, Tf, N+1), pi/4, simU, simX, latexify=True)
+    if mpc_model == 'attitude-fo':
+        plot_drone_tet_fo_eval(np.linspace(0, Tf, N+1), pi/4, simU, simX, latexify=True)
+    elif mpc_model == 'attitude-gpt':
+        plot_drone_tet_gpt_eval(np.linspace(0, Tf, N+1), 10.0, 0.1, simU, simX, latexify=True)
 
 if __name__ == "__main__":
-    solve_ocp()
+    solve_ocp(mpc_model='attitude-gpt')
