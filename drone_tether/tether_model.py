@@ -20,7 +20,6 @@ def export_drone_tether_ode_model() -> AcadosModel:
     rho_te = 970 # density of the tether [kg/m^3]
     A_te = 0.00000078 # cross-sectional area of the tether [m^2]
     tau_l = 0.4 # time constant of the tether length, RANDOM [s]
-    kp = 6.76e6
     # Compute moments of inertia
     j_sphere = (1/2)*m_ce*r_ce**2
     j_motors = n_ro * m_ro*(l_dr**2)

@@ -9,7 +9,6 @@ import time
 def solve_ocp():
     ocp = AcadosOcp()
 
-    model = None
     moving_ref = False
     init_pose_ref = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
 
@@ -28,12 +27,12 @@ def solve_ocp():
     # Set costs
     Q = np.eye(nx)
     R = np.eye(nu)
-    Q[0,0] = 10.0     # x
-    Q[1,1] = 10.0     # y
-    Q[2,2] = 10.0     # z
-    Q[3,3] = 10.0      # phi
-    Q[4,4] = 10.0      # theta
-    Q[5,5] = 4.0      # psi
+    Q[0,0] = 1.0     # x
+    Q[1,1] = 1.0     # y
+    Q[2,2] = 1.0     # z
+    Q[3,3] = 1.0      # phi
+    Q[4,4] = 1.0      # theta
+    Q[5,5] = 1.0      # psi
     Q[6,6] = 1.0      # vwx
     Q[7,7] = 1.0      # vwy
     Q[8,8] = 1.0      # vwz
@@ -45,7 +44,7 @@ def solve_ocp():
     R[0,0] = 1.0    # tau_phi_cmd
     R[1,1] = 1.0    # tau_theta_cmd
     R[2,2] = 1.0    # tau_psi_cmd
-    R[3,3] = 10.0   # thrust
+    R[3,3] = 1.0   # thrust
     R[4,4] = 1.0    # l_tet_cmd
 
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
@@ -74,7 +73,7 @@ def solve_ocp():
     ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
 
     tet_sag_eps = 0.05 # margin to have some slack and not a full taught tether
-    dist_gs_drone = sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2])
+    dist_gs_drone = sqrt(model.x[0]**2 + model.x[1]**2 + model.x[2]**2)
     tet_constraint = model.x[12] - dist_gs_drone - tet_sag_eps
     ocp.model.con_h_expr = vertcat(tet_constraint)
     ocp.constraints.lh = np.array([0.0])
@@ -87,9 +86,9 @@ def solve_ocp():
     # set constraints
     lbu = np.array([0.0, 0.0, 0.0, 0.0, 0.1])
     ubu = np.array([5.0, 5.0, 5.0, 1.0, 50.0])
-    lbx = np.array([-200.0, -200.0, 0.0, -pi/4, -pi/4,
+    lbx = np.array([-100.0, -100.0, 0.0, -pi/4, -pi/4,
         -pi, -10.0, -10.0, -10.0,-10.0, -10.0, -10.0, 0.1])
-    ubx = np.array([+200.0, +200.0, +200.0, +pi/4, +pi/4,
+    ubx = np.array([+100.0, +100.0, +100.0, +pi/4, +pi/4,
         +pi, +10.0, +10.0, +10.0, +10.0, +10.0, +10.0, +50.0])
     ocp.constraints.lbu = lbu
     ocp.constraints.ubu = ubu
@@ -99,14 +98,11 @@ def solve_ocp():
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
     
-# Sent to NMPC: pos_w: [-0.007797, 0.006252, 0.987242], rpy: [3.138456, 0.006464, 0.039599], vel_w: [0.001847, -0.028322, 0.019275], pqr: [-0.019801, 0.023345, -0.003248], len_cable: [1.187292]
-# [INFO] [1746286634.466927968] [yannis_tether_control_node]: Sent to NMPC: pos_w: [0.028289, 0.027968, 1.000040], rpy: [0.001183, 0.007035, 1.544128], vel_w: [-0.015674, -0.006190, 0.023829], pqr: [0.027773, 0.006412, 0.001071], len_cable: [1.200831]
-
-    x0 = np.array([0.000269, -0.019629, 0.270822, -0.006750, 0.001310, 1.682433, -0.007691, 0.020016, 0.002858, -0.000120, 0.000390, 0.000441, 0.471533])
+    x0 = np.array([-0.0, 0.0, 0.5, -0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8])
     u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
     ocp.constraints.x0 = x0
 
-    # set options, not differentiating between models atm
+    # set options
     ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM' # FULL_CONDENSING_QPOASES
     ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
     ocp.solver_options.integrator_type = 'ERK'
