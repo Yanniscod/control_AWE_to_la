@@ -1,5 +1,5 @@
 from acados_template import AcadosOcp, AcadosOcpSolver
-from tether_model import export_drone_tether_ode_model_gpt
+from tether_model import export_drone_tether_ode_model
 import numpy as np
 import scipy.linalg
 from utils import plot_drone_tet_gpt_eval
@@ -11,12 +11,12 @@ def solve_ocp():
 
     model = None
     moving_ref = False
-    init_pose_ref = np.array([0.0, 0.0, 1.0, 0.0, 0.2, 1.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
 
-    model = export_drone_tether_ode_model_gpt()
+    model = export_drone_tether_ode_model()
     ocp.model = model
 
-    Tf = 1.0
+    Tf = 5.0
     N = 50 # horizon
     nx = model.x.rows()
     nu = model.u.rows()
@@ -99,8 +99,11 @@ def solve_ocp():
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
     
-    x0 = np.array([0.0, 0.0, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0, 0., 0.0, 0.0, 0.0, 0.7])
-    u0 = np.array([0.0, 0.0, 0.0, 0.4, 0.7])
+# Sent to NMPC: pos_w: [-0.007797, 0.006252, 0.987242], rpy: [3.138456, 0.006464, 0.039599], vel_w: [0.001847, -0.028322, 0.019275], pqr: [-0.019801, 0.023345, -0.003248], len_cable: [1.187292]
+# [INFO] [1746286634.466927968] [yannis_tether_control_node]: Sent to NMPC: pos_w: [0.028289, 0.027968, 1.000040], rpy: [0.001183, 0.007035, 1.544128], vel_w: [-0.015674, -0.006190, 0.023829], pqr: [0.027773, 0.006412, 0.001071], len_cable: [1.200831]
+
+    x0 = np.array([0.000269, -0.019629, 0.270822, -0.006750, 0.001310, 1.682433, -0.007691, 0.020016, 0.002858, -0.000120, 0.000390, 0.000441, 0.471533])
+    u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
     ocp.constraints.x0 = x0
 
     # set options, not differentiating between models atm
@@ -109,7 +112,6 @@ def solve_ocp():
     ocp.solver_options.integrator_type = 'ERK'
     ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
     ocp.solver_options.tf = Tf
-    # ocp.solver_options.tol = 1e-4
 
     ocp_solver = AcadosOcpSolver(ocp)
 
