@@ -10,12 +10,12 @@ def solve_ocp():
     ocp = AcadosOcp()
 
     moving_ref = False
-    init_pose_ref = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([0.0, 0.0, 10.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
 
     model = export_drone_tether_ode_model()
     ocp.model = model
 
-    Tf = 5.0
+    Tf = 2.0
     N = 50 # horizon
     nx = model.x.rows()
     nu = model.u.rows()
@@ -27,11 +27,11 @@ def solve_ocp():
     # Set costs
     Q = np.eye(nx)
     R = np.eye(nu)
-    Q[0,0] = 1.0     # x
-    Q[1,1] = 1.0     # y
-    Q[2,2] = 1.0     # z
-    Q[3,3] = 1.0      # phi
-    Q[4,4] = 1.0      # theta
+    Q[0,0] = 6.0     # x
+    Q[1,1] = 6.0     # y
+    Q[2,2] = 6.0     # z
+    Q[3,3] = 2.0      # phi
+    Q[4,4] = 2.0      # theta
     Q[5,5] = 1.0      # psi
     Q[6,6] = 1.0      # vwx
     Q[7,7] = 1.0      # vwy
@@ -44,7 +44,7 @@ def solve_ocp():
     R[0,0] = 1.0    # tau_phi_cmd
     R[1,1] = 1.0    # tau_theta_cmd
     R[2,2] = 1.0    # tau_psi_cmd
-    R[3,3] = 1.0   # thrust
+    R[3,3] = 10.0   # thrust
     R[4,4] = 1.0    # l_tet_cmd
 
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
@@ -83,13 +83,21 @@ def solve_ocp():
     ocp.constraints.lh_e = np.array([0.0])
     ocp.constraints.uh_e = np.array([10.0])
 
+
+    POS_W_MAX = 200.0
+    VEL_W_MAX = 35.0
+    ANG_RATE_MAX = 30.0
+    TET_LEN_MIN = 0.1
+    TET_LEN_MAX = 60.0
+    TAU_MAX = 10.0
+
     # set constraints
     lbu = np.array([0.0, 0.0, 0.0, 0.0, 0.1])
-    ubu = np.array([5.0, 5.0, 5.0, 1.0, 50.0])
-    lbx = np.array([-100.0, -100.0, 0.0, -pi/4, -pi/4,
-        -pi, -10.0, -10.0, -10.0,-10.0, -10.0, -10.0, 0.1])
-    ubx = np.array([+100.0, +100.0, +100.0, +pi/4, +pi/4,
-        +pi, +10.0, +10.0, +10.0, +10.0, +10.0, +10.0, +50.0])
+    ubu = np.array([TAU_MAX, TAU_MAX, TAU_MAX, 1.0, 50.0])
+    lbx = np.array([-POS_W_MAX, -POS_W_MAX, -2.0, -pi/4, -pi/4,
+        -pi, -VEL_W_MAX, -VEL_W_MAX, -VEL_W_MAX, -ANG_RATE_MAX, -ANG_RATE_MAX, -ANG_RATE_MAX, TET_LEN_MIN])
+    ubx = np.array([POS_W_MAX, POS_W_MAX, POS_W_MAX, +pi/4, +pi/4,
+        +pi, VEL_W_MAX, VEL_W_MAX, VEL_W_MAX, ANG_RATE_MAX, ANG_RATE_MAX, ANG_RATE_MAX, TET_LEN_MAX])
     ocp.constraints.lbu = lbu
     ocp.constraints.ubu = ubu
     ocp.constraints.idxbu = np.arange(nu)
@@ -98,8 +106,8 @@ def solve_ocp():
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
     
-    x0 = np.array([-0.0, 0.0, 0.5, -0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8])
-    u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
+    x0 = np.array([-0.36, 0.19, 4.68, 0.01, 0.00, 2.13, -0.31, 0.08, 0.36, -0.07, -0.08, 0.13, 4.90])
+    u0 = np.array([0.0, 0.0, 0.0, 1.0, 5.652882])
     ocp.constraints.x0 = x0
 
     # set options
@@ -108,6 +116,7 @@ def solve_ocp():
     ocp.solver_options.integrator_type = 'ERK'
     ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
     ocp.solver_options.tf = Tf
+    # ocp.solver_options.tolerance = 1e-4
 
     ocp_solver = AcadosOcpSolver(ocp)
 
