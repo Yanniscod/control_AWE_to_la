@@ -10,7 +10,7 @@ def solve_ocp():
     ocp = AcadosOcp()
 
     moving_ref = False
-    init_pose_ref = np.array([0.0, 0.0, 5.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([1.0, 1.0, 5.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
 
     model = export_drone_tether_ode_model()
     ocp.model = model
@@ -30,15 +30,15 @@ def solve_ocp():
     Q[0,0] = 11.0     # x
     Q[1,1] = 11.0     # y
     Q[2,2] = 11.0     # z
-    Q[3,3] = 9.0      # phi
-    Q[4,4] = 9.0      # theta
-    Q[5,5] = 4.0      # psi
+    Q[3,3] = 0.0      # phi
+    Q[4,4] = 0.0      # theta
+    Q[5,5] = 0.0      # psi
     Q[6,6] = 1.0      # vwx
     Q[7,7] = 1.0      # vwy
     Q[8,8] = 1.0      # vwz
-    Q[9,9] = 3.0      # p
-    Q[10,10] = 3.0    # q
-    Q[11,11] = 1.0    # r
+    Q[9,9] = 5.0      # p
+    Q[10,10] = 5.0    # q
+    Q[11,11] = 5.0    # r
     Q[12,12] = 1.0    # l_tet
 
     R[0,0] = 1.0    # tau_phi_cmd
@@ -83,12 +83,12 @@ def solve_ocp():
     ocp.constraints.lh_e = np.array([0.0])
     ocp.constraints.uh_e = np.array([10.0])
 
-    POS_W_MAX = 200.0
-    VEL_W_MAX = 25.0
-    ANG_RATE_MAX = 20.0
+    POS_W_MAX = 100.0
+    VEL_W_MAX = 15.0
+    ANG_RATE_MAX = 10.0
     TET_LEN_MIN = 0.1
     TET_LEN_MAX = 50.0
-    TAU_MAX = 15.0
+    TAU_MAX = 10.0
 
     # set constraints
     lbu = np.array([-TAU_MAX, -TAU_MAX, -TAU_MAX, 0.0, 0.1])
@@ -105,8 +105,8 @@ def solve_ocp():
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
     
-    x0 = np.array([1.0, 0.0, 5.0, 0.0, 0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0])
-    u0 = np.array([0.0, 0.0, 0.0, 0.5, 6.0])
+    x0 = np.array([0.0, 0.0, 2.0, 0.0, 0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0])
+    u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
     ocp.constraints.x0 = x0
 
     # set options

@@ -14,7 +14,7 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[0,0].plot(time[:-1], simU[:, 2], label=r'$\tau_{\psi}$')
     axs[0,0].axhline(tau_max, color='gray', linestyle='--', label='bounds')
     axs[0,0].axhline(-tau_max, color='gray', linestyle='--')
-    axs[0,0].set_ylabel("tau input [Nm]")
+    axs[0,0].set_ylabel("Tau input [Nm]")
     axs[0,0].legend()
     axs[0,0].grid(True)
     axs[0,0].set_title('Input commands')
@@ -23,15 +23,15 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[1,0].plot(time[:-1], simU[:, 3], label=r'$thrust$')
     axs[1,0].axhline(0.0, color='gray', linestyle='--', label='')
     axs[1,0].axhline(1.0, color='gray', linestyle='--', label='')
-    axs[1,0].set_ylabel("thrust input")
-    axs[1,0].set_xlabel("Time [s]")
-    axs[1,0].legend()
+    axs[1,0].set_ylabel("Thrust input")
     axs[1,0].grid(True)
 
     # Plot tether length command
     axs[2,0].plot(time[:-1], simU[:, 4], label=r'$l_{\mathrm{tether_{cmd}}}$')
     axs[2,0].axhline(l_tet_min, color='gray', linestyle='--', label='')
     axs[2,0].set_ylabel("Tether Length [m]")
+    axs[2,0].set_xlabel("Time [s]")
+    axs[1,0].legend()
     axs[2,0].legend()
     axs[2,0].grid(True)
 
@@ -49,13 +49,13 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[1,1].plot(time, simX[:, 3], label='phi')
     axs[1,1].plot(time, simX[:, 4], label='theta')
     axs[1,1].plot(time, simX[:, 5], label='psi')
-    axs[1,1].set_ylabel("Orientation [deg]")
+    axs[1,1].set_ylabel("Orientation [rad]")
     axs[1,1].legend()
     axs[1,1].grid(True)
 
     # Plot l_tet
     axs[2,1].plot(time, simX[:, 12], label='l_tet')
-    axs[2,1].set_ylabel("tether length [m]")
+    axs[2,1].set_ylabel("Tether length [m]")
     axs[2,1].set_xlabel("Time [s]")
     axs[2,1].legend()
     axs[2,1].grid(True)
