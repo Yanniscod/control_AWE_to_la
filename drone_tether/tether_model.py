@@ -125,7 +125,7 @@ def export_drone_tether_ode_model() -> AcadosModel:
 
     # Force tether
     e_tet = vertcat(s_theta_s*c_phi_s, s_theta_s*s_phi_s, c_theta_s) # cartesian unit vector in the direction of the tether reaction (-) force
-    # NOT CONSIDERING WINCH FORCE ATM
+    f_winch = 0.0 # NOT CONSIDERING WINCH FORCE ATM
     F_grav_tet = g*rho_te*A_te*l_tet*e_tet # tether force in world frame
     F_tet = F_grav_tet
     # gravity
@@ -138,7 +138,7 @@ def export_drone_tether_ode_model() -> AcadosModel:
                      1/J[0, 0]*(tau_x - (J[2, 2] - J[1, 1])*q*r),
                      1/J[1, 1]*(tau_y - (J[0, 0] - J[2, 2])*p*r),
                      1/J[2, 2]*(tau_z - (J[1, 1] - J[0, 0])*p*q),
-                     1/tau_l*(l_tet - l_tet_cmd)
+                     1/tau_l*(l_tet_cmd - l_tet)
                      )
 
     f_impl = xdot - f_expl

@@ -34,7 +34,6 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
     axs[2,0].set_ylabel("Tether Length [m]")
     axs[2,0].legend()
     axs[2,0].grid(True)
-    # fig.suptitle('Input commands', fontsize=14)
 
     #################### STATES ####################
     # Plot drone position
