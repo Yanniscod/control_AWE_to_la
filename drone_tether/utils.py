@@ -28,6 +28,7 @@ def plot_drone_tet_gpt_eval(time, tau_max, l_tet_min,  simU, simX, latexify=Fals
 
     # Plot tether length command
     axs[2,0].plot(time[:-1], simU[:, 4], label=r'$l_{\mathrm{tether_{cmd}}}$')
+    axs[2,0].plot(time, simX[:, 12], label='l_tet')
     axs[2,0].axhline(l_tet_min, color='gray', linestyle='--', label='')
     axs[2,0].set_ylabel("Tether Length [m]")
     axs[2,0].set_xlabel("Time [s]")

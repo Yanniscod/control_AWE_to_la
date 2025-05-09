@@ -10,13 +10,17 @@ def solve_ocp():
     ocp = AcadosOcp()
 
     moving_ref = False
-    init_pose_ref = np.array([1.0, 1.0, 5.0, 0.0, 0.0, 0.0]) # x_w, y_w, z_w
+    init_pose_ref = np.array([1.622028, -2.523693, 5.000000]) # x_w, y_w, z_w
+    x0 = np.array([1.123196, -2.017403, 4.428124, -0.033080, 0.029961, 1.907401, 0.760853, 0.409851, -0.136514, -0.017031, 0.070304, -0.042765, 5.032940])
+    u0 = np.array([0.000000, 0.000000, 0.000000, 0.473300, 0.032940])
+
+    freq = 10.0 # Hz, loop frequency
+    N = 20 # horizon length
 
     model = export_drone_tether_ode_model()
     ocp.model = model
 
-    Tf = 2.0
-    N = 20 # horizon
+    Tf = N/freq
     nx = model.x.rows()
     nu = model.u.rows()
     ny = nx + nu
@@ -27,15 +31,15 @@ def solve_ocp():
     # Set costs
     Q = np.eye(nx)
     R = np.eye(nu)
-    Q[0,0] = 11.0     # x
-    Q[1,1] = 11.0     # y
-    Q[2,2] = 11.0     # z
+    Q[0,0] = 5.0     # x
+    Q[1,1] = 5.0     # y
+    Q[2,2] = 5.0     # z
     Q[3,3] = 0.0      # phi
     Q[4,4] = 0.0      # theta
-    Q[5,5] = 0.0      # psi
-    Q[6,6] = 1.0      # vwx
-    Q[7,7] = 1.0      # vwy
-    Q[8,8] = 1.0      # vwz
+    Q[5,5] = 1.0      # psi
+    Q[6,6] = 10.0      # vwx
+    Q[7,7] = 10.0      # vwy
+    Q[8,8] = 10.0      # vwz
     Q[9,9] = 5.0      # p
     Q[10,10] = 5.0    # q
     Q[11,11] = 5.0    # r
@@ -44,11 +48,11 @@ def solve_ocp():
     R[0,0] = 1.0    # tau_phi_cmd
     R[1,1] = 1.0    # tau_theta_cmd
     R[2,2] = 1.0    # tau_psi_cmd
-    R[3,3] = 10.0   # thrust
+    R[3,3] = 8.0   # thrust
     R[4,4] = 1.0    # l_tet_cmd
 
     ocp.cost.W = scipy.linalg.block_diag(Q, R)
-    ocp.cost.W_e = 10*scipy.linalg.block_diag(Q) # VERY TIME CONSUMING THIS ONE
+    ocp.cost.W_e = scipy.linalg.block_diag(Q) # caution: acados already increases the cost for the terminal state
 
     ocp.cost.cost_type = 'NONLINEAR_LS'
     ocp.cost.cost_type_e = 'NONLINEAR_LS'
@@ -57,17 +61,11 @@ def solve_ocp():
     yref[0] = init_pose_ref[0] # x_w
     yref[1] = init_pose_ref[1] # y_w
     yref[2] = init_pose_ref[2] # z_w
-    yref[3] = init_pose_ref[3] # phi
-    yref[4] = init_pose_ref[4] # theta
-    yref[5] = init_pose_ref[5] # psi
     ocp.cost.yref = yref
     yref_e = np.zeros((ny_e, ))
     yref_e[0] = init_pose_ref[0] # x_w
     yref_e[1] = init_pose_ref[1] # y_w
     yref_e[2] = init_pose_ref[2] # z_w
-    yref_e[3] = init_pose_ref[3] # phi
-    yref_e[4] = init_pose_ref[4] # theta
-    yref_e[5] = init_pose_ref[5] # psi
     ocp.cost.yref_e = yref_e
     ocp.model.cost_y_expr = vertcat(ocp.model.x, ocp.model.u)
     ocp.model.cost_y_expr_e = vertcat(ocp.model.x)
@@ -104,9 +102,6 @@ def solve_ocp():
     ocp.constraints.lbx = lbx
     ocp.constraints.ubx = ubx
     ocp.constraints.idxbx = np.arange(nx)
-    
-    x0 = np.array([0.0, 0.0, 2.0, 0.0, 0.0, -0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0])
-    u0 = np.array([0.0, 0.0, 0.0, 0.5, 1.0])
     ocp.constraints.x0 = x0
 
     # set options
@@ -115,7 +110,6 @@ def solve_ocp():
     ocp.solver_options.integrator_type = 'ERK'
     ocp.solver_options.nlp_solver_type = 'SQP' # SQP_RTI, SQP
     ocp.solver_options.tf = Tf
-    # ocp.solver_options.tolerance = 1e-4
 
     ocp_solver = AcadosOcpSolver(ocp)
 
@@ -131,11 +125,9 @@ def solve_ocp():
     theta_ref = 0.0
     for nsim in range(nsim):
         # constraints state
-        # x_init = get_state_from_px4()
         ocp_solver.constraints_set(0, 'lbx', x0) # == data from sensor
         ocp_solver.constraints_set(0, 'ubx', x0)
 
-        # yref = get_target_from_px4()
         # set circular ref
         if(moving_ref):
             yref[0] = 1.0*cos(theta_ref)
@@ -168,7 +160,7 @@ def solve_ocp():
         ocp_solver.set(N, "x", simX[-1])        # last state guess = last predicted
 
         x_init = ocp_solver.get(1, "x") # uses simulated state as sensor data
-        u_init = ocp_solver.get(0, "u")
+        u_init = ocp_solver.get(1, "u")
         print("new x0:", x_init)
         print("new u0:", u_init)
         theta_ref += 0.01
